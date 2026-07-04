@@ -23,6 +23,15 @@ export interface Methods {
   readonly "ui.state": { readonly params: undefined; readonly result: UiState }
   readonly "ui.action": { readonly params: { readonly action: UiAction }; readonly result: UiState }
   readonly "ui.render": { readonly params: undefined; readonly result: UiState }
+  readonly "event.pause": { readonly params: undefined; readonly result: { readonly state: "paused" } }
+  readonly "event.resume": {
+    readonly params: undefined
+    readonly result: { readonly state: "connected" | "reconnecting" }
+  }
+  readonly "event.state": {
+    readonly params: undefined
+    readonly result: { readonly state: "connected" | "paused" | "reconnecting" }
+  }
   readonly "trace.list": { readonly params: undefined; readonly result: TraceList }
   readonly "trace.clear": { readonly params: undefined; readonly result: TraceCleared }
   readonly "trace.export": { readonly params: undefined; readonly result: TraceList }
@@ -36,6 +45,10 @@ export interface BackendMethods {
   }
   readonly "llm.finish": {
     readonly params: { readonly id: string; readonly reason?: BackendFinishReason }
+    readonly result: { readonly ok: true }
+  }
+  readonly "llm.disconnect": {
+    readonly params: { readonly id: string }
     readonly result: { readonly ok: true }
   }
   readonly "llm.pending": { readonly params: undefined; readonly result: { readonly exchanges: ReadonlyArray<OpenedExchange> } }

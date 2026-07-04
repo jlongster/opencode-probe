@@ -1,10 +1,15 @@
 import path from "node:path"
 import { generateFlow, type FlowResult } from "./flows/index.js"
+import { parseWeightsFromArgs, parseEnabledTools } from "./flows/weights.js"
 
-const config = {
-  model: "simulation/sim-model",
-  providers: {
-    simulation: {
+const config = (seed: number) => {
+  const provider = seed % 2 === 0 ? "openai" : "simulation"
+  return {
+    model: `${provider}/sim-model`,
+    permissions: [{ action: "*", resource: "*", effect: seed % 3 === 0 ? "ask" : "allow" }],
+    skills: [".opencode/skills"],
+    providers: {
+      [provider]: {
       name: "Simulation",
       request: { body: { apiKey: "sim-key" } },
       models: {
@@ -15,11 +20,14 @@ const config = {
           limit: { context: 128000, output: 16000 },
         },
       },
+      },
     },
-  },
+  }
 }
 
 const options = parseArgs(process.argv.slice(2))
+const weights = parseWeightsFromArgs(process.argv.slice(2))
+const enabledTools = parseEnabledTools(process.argv.slice(2)) ?? undefined
 const root = path.resolve(options.out)
 await Bun.$`rm -rf ${root}`.quiet()
 await Bun.$`mkdir -p ${root}`.quiet()
@@ -36,7 +44,8 @@ for (let index = 0; index < options.count; index++) {
   const directory = path.join(root, `flow-${String(index + 1).padStart(2, "0")}-${seed}`)
   const state = path.join(directory, "state", "project")
   await Bun.$`mkdir -p ${path.join(state, ".config/opencode")} ${path.join(state, "src")}`.quiet()
-  const scenario = generateFlow(seed, { turns: options.turns })
+  await Bun.$`mkdir -p ${path.join(state, ".opencode/skills/simulation-demo")}`.quiet()
+  const scenario = generateFlow(seed, { turns: options.turns, weights, enabledTools })
   coverage.responseKinds.text += scenario.coverage.responseKinds.text
   coverage.responseKinds.chunked += scenario.coverage.responseKinds.chunked
   coverage.responseKinds.reasoning += scenario.coverage.responseKinds.reasoning
@@ -54,8 +63,9 @@ for (let index = 0; index < options.count; index++) {
   for (const type of scenario.coverage.streamChunkTypes) coverage.streamChunkTypes.add(type)
   await Promise.all([
     Bun.write(path.join(directory, "scenario.json"), `${JSON.stringify(scenario, undefined, 2)}\n`),
-    Bun.write(path.join(state, "opencode.json"), `${JSON.stringify(config, undefined, 2)}\n`),
-    Bun.write(path.join(state, ".config/opencode/opencode.json"), `${JSON.stringify(config, undefined, 2)}\n`),
+    Bun.write(path.join(state, "opencode.json"), `${JSON.stringify(config(seed), undefined, 2)}\n`),
+    Bun.write(path.join(state, ".config/opencode/opencode.json"), `${JSON.stringify(config(seed), undefined, 2)}\n`),
+    Bun.write(path.join(state, ".opencode/skills/simulation-demo/SKILL.md"), "---\nname: simulation-demo\ndescription: Simulation fixture skill\n---\nUse this skill to exercise the built-in skill loader.\n"),
     Bun.write(path.join(state, "src/example.ts"), "export function greet(name: string) {\n  return `hello ${name}`\n}\n"),
     Bun.write(path.join(state, "src/server.ts"), "export function createServer() {\n  return { close() {} }\n}\n"),
     Bun.write(path.join(state, "src/cache.ts"), "export const invalidate = (key: string) => key\n"),
@@ -105,6 +115,7 @@ const summary = {
   seed: options.seed,
   turns: results.reduce((total, result) => total + result.turns, 0),
   assistantExchanges: results.reduce((total, result) => total + result.assistantExchanges, 0),
+  subagentExchanges: results.reduce((total, result) => total + result.subagentExchanges, 0),
   titleExchanges: results.reduce((total, result) => total + result.titleExchanges, 0),
   traceRecords: results.reduce((total, result) => total + result.traceRecords, 0),
   durationMs: results.reduce((total, result) => total + result.durationMs, 0),

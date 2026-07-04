@@ -8,7 +8,7 @@ export interface FlowResponse {
   readonly chunks: ReadonlyArray<ReadonlyArray<BackendItem>>
   readonly finish: BackendFinishReason
   readonly toolNames?: ReadonlyArray<string>
-  readonly terminal?: "finish" | "invalid-provider-event"
+  readonly terminal?: "finish" | "invalid-provider-event" | "disconnect"
   readonly streamChunkTypes?: ReadonlyArray<string>
 }
 
@@ -39,6 +39,7 @@ export interface FlowResult {
   readonly name: string
   readonly turns: number
   readonly assistantExchanges: number
+  readonly subagentExchanges: number
   readonly titleExchanges: number
   readonly traceRecords: number
   readonly durationMs: number

@@ -95,6 +95,10 @@ export class BackendSimulationClient {
     return this.call("llm.finish", { id, ...(reason === undefined ? {} : { reason }) })
   }
 
+  disconnect(id: string) {
+    return this.call("llm.disconnect", { id })
+  }
+
   pendingExchanges() {
     return this.call("llm.pending")
   }

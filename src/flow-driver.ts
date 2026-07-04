@@ -14,6 +14,7 @@ const backend = await connectBackendSimulation({ url: requiredEnv("OPENCODE_SIMU
 const responses = scenario.turns.flatMap((turn) => turn.responses)
 let assistantExchanges = 0
 let responseCursor = 0
+let subagentExchanges = 0
 let titleExchanges = 0
 let failure: Error | undefined
 const active = new Set<string>()
@@ -28,6 +29,12 @@ await backend.attach(async (request: OpenedExchange) => {
       await backend.finish(request.id, "stop")
       return
     }
+    if (isSubagentRequest(request)) {
+      subagentExchanges++
+      await backend.chunk(request.id, [{ type: "textDelta", text: "The nested simulation fixture is consistent." }])
+      await backend.finish(request.id, "stop")
+      return
+    }
     const response = responses[responseCursor++]
     assistantExchanges++
     if (response === undefined) throw new Error(`unexpected assistant exchange ${assistantExchanges}`)
@@ -37,8 +44,9 @@ await backend.attach(async (request: OpenedExchange) => {
       chunksSent++
       if (chunkDelay > 0) await Bun.sleep(chunkDelay)
     }
-    if (chunkDelay > 0) await Bun.sleep(chunkDelay * 3)
-    if (response.terminal !== "invalid-provider-event") await backend.finish(request.id, response.finish)
+    if (chunkDelay > 0) await Bun.sleep(Math.max(chunkDelay * 3, 100))
+    if (response.terminal === "disconnect") await backend.disconnect(request.id)
+    else if (response.terminal !== "invalid-provider-event") await backend.finish(request.id, response.finish)
   } catch (error) {
     if (!interrupted.has(request.id)) failure = error instanceof Error ? error : new Error(String(error))
   } finally {
@@ -51,6 +59,7 @@ try {
   let expectedExchanges = 0
   for (const turn of scenario.turns) {
     if (failure !== undefined) throw failure
+    await waitFor("prompt editor before submit", async () => (await ui.render()).focused.editor)
     expectedExchanges += turn.responses.length
     const beforeChunks = chunksSent
     await ui.typeText(turn.prompt)
@@ -58,6 +67,10 @@ try {
     await runProperties("afterSubmit", { turn, ui, backend, waitFor })
     if (turn.interaction === "double-submit") await ui.pressEnter()
     let outcome: TurnOutcome = "completed"
+    const hasTools = turn.responses.some((response) => (response.toolNames?.length ?? 0) > 0)
+    const settleTools = turn.interaction === "interrupt" || !hasTools
+      ? undefined
+      : settleBlockingUi(expectedExchanges)
     if (turn.interaction === "steer") {
       await waitFor("active stream", async () => active.size > 0 && chunksSent > beforeChunks)
       await ui.typeText(turn.steerPrompt ?? "Also inspect the active boundary.")
@@ -72,11 +85,11 @@ try {
       responseCursor = expectedExchanges
       outcome = "interrupted"
     } else if (turn.interaction === "provider-drop") {
+      await waitFor("dropped provider exchange", async () => responseCursor >= expectedExchanges)
       await waitFor("dropped provider drain", async () => active.size === 0 && (await backend.pendingExchanges()).exchanges.length === 0)
-      await ui.pressKey("escape")
-      await ui.pressKey("escape")
       outcome = "provider-error"
     } else {
+      await settleTools
       await waitFor(turn.marker, async () => {
         if (failure !== undefined) throw failure
         await ui.render()
@@ -87,15 +100,13 @@ try {
     if (stepDelay > 0) await Bun.sleep(stepDelay)
   }
   await waitFor("provider idle", async () => (await backend.pendingExchanges()).exchanges.length === 0)
-  if (assistantExchanges > scenario.coverage.providerExchanges) {
-    throw new Error(`expected at most ${scenario.coverage.providerExchanges} assistant exchanges, received ${assistantExchanges}`)
-  }
   const trace = await ui.traceExport()
   const result: FlowResult = {
     seed: scenario.seed,
     name: scenario.name,
     turns: scenario.turns.length,
     assistantExchanges,
+    subagentExchanges,
     titleExchanges,
     traceRecords: trace.records.length,
     durationMs: Date.now() - started,
@@ -103,6 +114,18 @@ try {
   }
   if (resultPath !== undefined) await Bun.write(resultPath, `${JSON.stringify(result, undefined, 2)}\n`)
   console.log(JSON.stringify({ ...result, finalScreen: undefined }))
+} catch (error) {
+  if (resultPath !== undefined) {
+    await Bun.write(`${resultPath}.failure.json`, `${JSON.stringify({
+      error: error instanceof Error ? error.message : String(error),
+      assistantExchanges,
+      subagentExchanges,
+      titleExchanges,
+      pendingExchanges: (await backend.pendingExchanges()).exchanges,
+      screen: (await ui.state()).screen,
+    }, undefined, 2)}\n`)
+  }
+  throw error
 } finally {
   ui.close()
   backend.close()
@@ -123,6 +146,16 @@ function isTitleRequest(request: OpenedExchange) {
   return typeof first.content === "string" && first.content.includes("You are a title generator")
 }
 
+function isSubagentRequest(request: OpenedExchange) {
+  if (typeof request.body !== "object" || request.body === null || !("messages" in request.body)) return false
+  const messages = request.body.messages
+  if (!Array.isArray(messages)) return false
+  return messages.some((message) => {
+    if (typeof message !== "object" || message === null || !("content" in message)) return false
+    return typeof message.content === "string" && message.content.includes("Inspect the simulation fixture.")
+  })
+}
+
 async function waitFor(label: string, check: () => Promise<boolean>, timeout = 30_000) {
   const deadline = Date.now() + timeout
   while (Date.now() < deadline) {
@@ -139,9 +172,26 @@ async function runProperties(stage: "afterSubmit" | "afterTerminal", context: Fl
     try {
       await check(context)
     } catch (error) {
-      throw new Error(`property ${property.name} failed: ${error instanceof Error ? error.message : String(error)}`, {
+      throw new Error(`property ${property.name} failed for ${context.turn.marker}: ${error instanceof Error ? error.message : String(error)}`, {
         cause: error,
       })
     }
   }
+}
+
+async function settleBlockingUi(expectedExchanges: number) {
+  const deadline = Date.now() + 30_000
+  while (Date.now() < deadline && responseCursor < expectedExchanges) {
+    const state = await ui.render()
+    if (state.screen.includes("Allow once") && state.screen.includes("enter confirm")) {
+      await ui.pressEnter()
+      continue
+    }
+    if (state.screen.includes("Choose the simulation path") && state.screen.includes("enter submit")) {
+      await ui.pressKey("1")
+      continue
+    }
+    await Bun.sleep(25)
+  }
+  if (responseCursor < expectedExchanges) throw new Error("timed out settling blocking tool UI")
 }

@@ -7,6 +7,8 @@
   "packageManager": "bun@1.3.14",
   "scripts": {
     "campaign": "bun run src/campaign.ts",
+    "reproduce:stale-running": "bun run src/reproduce-stale-running.ts",
+    "reproduce:stale-running:visible": "bun run src/reproduce-stale-running-visible.ts",
     "generate": "bun run src/cli.ts",
     "lint": "oxlint src",
     "postinstall": "bun run sync:links",

@@ -125,12 +125,24 @@ export class SimulationClient {
     return this.call("ui.render")
   }
 
+  eventPause() {
+    return this.call("event.pause")
+  }
+
+  eventResume() {
+    return this.call("event.resume")
+  }
+
+  eventState() {
+    return this.call("event.state")
+  }
+
   typeText(text: string): Promise<UiState> {
     return this.action({ type: "typeText", text })
   }
 
   pressKey(key: string, modifiers?: KeyModifiers): Promise<UiState> {
-    return this.action({ type: "pressKey", key, ...(modifiers === undefined ? {} : { modifiers }) })
+    return this.action({ type: "pressKey", key: key === "escape" ? "\u001b" : key, ...(modifiers === undefined ? {} : { modifiers }) })
   }
 
   pressEnter(): Promise<UiState> {

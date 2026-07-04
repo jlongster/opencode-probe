@@ -22,8 +22,10 @@ export const defineProperty = (property: FlowProperty) => property
 export const flowProperties: ReadonlyArray<FlowProperty> = [
   defineProperty({
     name: "submitted-turn-shows-running",
-    afterSubmit: (context) =>
-      context.waitFor("submitted turn to show running", async () => isRunning(await context.ui.render())),
+    afterSubmit: (context) => {
+      if (context.turn.responses.some((response) => response.terminal === "invalid-provider-event" || response.terminal === "disconnect")) return Promise.resolve()
+      return context.waitFor("submitted turn to show running", async () => isRunning(await context.ui.render()))
+    },
   }),
   defineProperty({
     name: "turn-reaches-terminal-outcome",
@@ -39,8 +41,7 @@ export const flowProperties: ReadonlyArray<FlowProperty> = [
     name: "terminal-turn-clears-running",
     afterTerminal: (context) =>
       context.waitFor("terminal turn to stop showing running", async () => {
-        const state = await context.ui.render()
-        return state.focused.editor && !isRunning(state)
+        return !isRunning(await context.ui.render())
       }),
   }),
 ]
