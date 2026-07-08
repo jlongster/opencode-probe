@@ -45,10 +45,6 @@ const startCommand = Command.make(
       Flag.optional,
       Flag.withDescription("Path to an OpenCode development checkout"),
     ),
-    state: Flag.string("state").pipe(
-      Flag.optional,
-      Flag.withDescription("Simulation snapshot containing files/"),
-    ),
   },
   (config) =>
     execute(() =>
@@ -173,7 +169,6 @@ function toStartOptions(
     readonly visible: boolean
     readonly record: boolean
     readonly dev: Option.Option<string>
-    readonly state: Option.Option<string>
   },
   commands: ReadonlyArray<DriveCommand>,
   app: ReadonlyArray<string>,
@@ -188,7 +183,6 @@ function toStartOptions(
     visible: config.visible,
     record: config.record,
     dev: Option.getOrUndefined(config.dev),
-    state: Option.getOrUndefined(config.state),
     command: app,
   }
   if (options.dev !== undefined && app.length > 0)

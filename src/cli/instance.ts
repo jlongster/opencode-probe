@@ -1,17 +1,18 @@
-import { mkdir, rm } from "node:fs/promises"
+import { mkdir } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { ensureMediaDirectory } from "./media.js"
+import type { DriveScriptSetup } from "./script.js"
 
 export interface LaunchOptions {
   readonly name: string
   readonly command?: ReadonlyArray<string>
   readonly dev?: string
-  readonly state?: string
   readonly scripted?: boolean
   readonly visible?: boolean
   readonly record?: boolean
   readonly env?: Readonly<Record<string, string>>
+  readonly setup?: DriveScriptSetup
 }
 
 export async function launchInstance(options: LaunchOptions) {
@@ -47,62 +48,57 @@ export async function launchInstance(options: LaunchOptions) {
       )}\n`,
     )
   await writeDriveManifest()
-  const state = options.state
-    ? resolve(options.state)
-    : join(artifacts, "state")
-  if (!options.state) {
-    await rm(state, { recursive: true, force: true })
-    await Promise.all([
-      mkdir(join(state, "files", ".git"), { recursive: true }),
-      mkdir(join(state, "files", ".opencode"), { recursive: true }),
-      mkdir(join(state, "files", "src"), { recursive: true }),
-    ])
-    await Promise.all([
-      Bun.write(
-        join(state, "files", ".opencode", "opencode.jsonc"),
-        `${JSON.stringify(
-          {
-            model: "simulation/gpt-sim-model",
-            permissions: [{ action: "*", resource: "*", effect: "allow" }],
-            providers: {
-              simulation: {
-                name: "Simulation",
-                package: "aisdk:@ai-sdk/openai-compatible",
-                settings: { baseURL: "https://api.openai.com/v1" },
-                request: { body: { apiKey: "sim-key" } },
-                models: {
-                  "gpt-sim-model": {
-                    name: "Simulated Model",
-                    capabilities: {
-                      tools: true,
-                      input: ["text"],
-                      output: ["text"],
-                    },
-                    limit: { context: 128000, output: 16000 },
+  const files = join(artifacts, "files")
+  await Promise.all([
+    mkdir(join(files, ".git"), { recursive: true }),
+    mkdir(join(files, ".opencode"), { recursive: true }),
+    mkdir(join(files, "src"), { recursive: true }),
+  ])
+  await Promise.all([
+    Bun.write(
+      join(files, ".opencode", "opencode.jsonc"),
+      `${JSON.stringify(
+        {
+          model: "simulation/gpt-sim-model",
+          permissions: [{ action: "*", resource: "*", effect: "allow" }],
+          providers: {
+            simulation: {
+              name: "Simulation",
+              package: "aisdk:@ai-sdk/openai-compatible",
+              settings: { baseURL: "https://api.openai.com/v1" },
+              request: { body: { apiKey: "sim-key" } },
+              models: {
+                "gpt-sim-model": {
+                  name: "Simulated Model",
+                  capabilities: {
+                    tools: true,
+                    input: ["text"],
+                    output: ["text"],
                   },
+                  limit: { context: 128000, output: 16000 },
                 },
               },
             },
           },
-          undefined,
-          2,
-        )}\n`,
-      ),
-      Bun.write(
-        join(state, "files", "src", "garden.js"),
-        'export function greet(name) {\n  return `Hello, ${name}.`\n}\n',
-      ),
-    ])
-  }
+        },
+        undefined,
+        2,
+      )}\n`,
+    ),
+    Bun.write(
+      join(files, "src", "garden.js"),
+      'export function greet(name) {\n  return `Hello, ${name}.`\n}\n',
+    ),
+  ])
+  await options.setup?.({ directory: files })
   const environment = cleanEnv({
     ...process.env,
     ...options.env,
     OPENCODE_SIMULATE: "1",
-    OPENCODE_SIMULATE_STATE: state,
     DRIVE_REGISTRY_DIR: drive,
     OPENCODE_DRIVE: options.name,
     OPENCODE_DRIVE_RENDERER: options.visible ? "visible" : "headless",
-    OPENCODE_CONFIG_DIR: join(artifacts, ".opencode"),
+    OPENCODE_CONFIG_DIR: join(files, ".opencode"),
     OPENCODE_DB: ":memory:",
     OPENCODE_LOG_LEVEL: !options.visible
       ? "INFO"
@@ -114,13 +110,13 @@ export async function launchInstance(options: LaunchOptions) {
     XDG_STATE_HOME: join(artifacts, "home", ".local", "state"),
   })
   const command = options.dev
-    ? await prepareDev(artifacts, options.dev)
+    ? await prepareDev(files, options.dev)
     : options.command?.length
       ? [...options.command]
       : ["opencode2"]
   const spawn = () =>
     Bun.spawn(command, {
-      cwd: artifacts,
+      cwd: files,
       env: environment,
       stdin: options.visible ? "inherit" : "ignore",
       stdout: !options.visible

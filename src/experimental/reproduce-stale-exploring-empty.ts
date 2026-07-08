@@ -19,7 +19,7 @@ export default defineScript(async ({ artifacts, backend, ui }) => {
           index: 0,
           id: "call_read",
           name: "read",
-          input: { filePath: join(artifacts, "state", "files", "src", "garden.js") },
+          input: { filePath: join(artifacts, "files", "src", "garden.js") },
         },
       ])
       await backend.finish(request.id, "tool-calls")

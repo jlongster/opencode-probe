@@ -22,6 +22,16 @@ if (process.env.OPENCODE_TEST_HOME) {
     `${process.env.OPENCODE_TEST_HOME}/renderer.txt`,
     process.env.OPENCODE_DRIVE_RENDERER ?? "missing",
   )
+  await Bun.write(
+    `${process.env.OPENCODE_TEST_HOME}/child-cwd.txt`,
+    process.cwd(),
+  )
+  const seeded = `${process.cwd()}/src/seeded.ts`
+  if (await Bun.file(seeded).exists())
+    await Bun.write(
+      `${process.env.OPENCODE_TEST_HOME}/seeded-at-launch.txt`,
+      await Bun.file(seeded).text(),
+    )
 }
 
 const ui = Bun.serve({

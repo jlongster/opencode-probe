@@ -11,7 +11,6 @@ export interface StartOptions {
   readonly visible: boolean
   readonly record: boolean
   readonly dev?: string
-  readonly state?: string
   readonly command: ReadonlyArray<string>
 }
 

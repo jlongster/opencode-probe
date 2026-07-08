@@ -438,6 +438,12 @@ describe("opencode-drive", () => {
     expect(await Bun.file(join(artifacts, "script-result.json")).exists()).toBe(
       true,
     )
+    expect(
+      await Bun.file(join(artifacts, "seeded-at-launch.txt")).text(),
+    ).toBe("export const seeded = true\n")
+    expect(await Bun.file(join(artifacts, "child-cwd.txt")).text()).toBe(
+      join(artifacts, "files"),
+    )
     const pid = Number(await Bun.file(join(artifacts, "child.pid")).text())
     expect(running(pid)).toBe(false)
     expect(

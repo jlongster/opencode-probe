@@ -15,23 +15,43 @@ export interface ScriptContext {
 
 export type DriveScript = (context: ScriptContext) => void | Promise<void>
 
+export interface ScriptSetupContext {
+  readonly directory: string
+}
+
+export type DriveScriptSetup = (
+  context: ScriptSetupContext,
+) => void | Promise<void>
+
+export interface LoadedDriveScript {
+  readonly run: DriveScript
+  readonly setup?: DriveScriptSetup
+}
+
 export function defineScript(script: DriveScript) {
   return script
 }
 
+export async function loadScript(file: string): Promise<LoadedDriveScript> {
+  const module: { readonly default?: unknown; readonly setup?: unknown } =
+    await import(pathToFileURL(resolve(file)).href)
+  if (!isDriveScript(module.default))
+    throw new Error("script must default-export a function")
+  if (module.setup !== undefined && !isDriveScriptSetup(module.setup))
+    throw new Error("script setup export must be a function")
+  return {
+    run: module.default,
+    ...(module.setup === undefined ? {} : { setup: module.setup }),
+  }
+}
+
 export async function runScript(
-  file: string,
+  script: DriveScript,
   artifacts: string,
   endpoints: { readonly ui: string; readonly backend: string },
   signal: AbortSignal,
   onScreenshot?: (path: string) => void,
 ) {
-  const module: { readonly default?: unknown } = await import(
-    pathToFileURL(resolve(file)).href
-  )
-  const script = module.default
-  if (!isDriveScript(script))
-    throw new Error("script must default-export a function")
   const ui = await connectSimulation({ url: endpoints.ui, onScreenshot })
   const backend = await connectBackendSimulation({
     url: endpoints.backend,
@@ -74,5 +94,9 @@ async function waitForEditor(ui: SimulationClient, signal: AbortSignal) {
 }
 
 function isDriveScript(value: unknown): value is DriveScript {
+  return typeof value === "function"
+}
+
+function isDriveScriptSetup(value: unknown): value is DriveScriptSetup {
   return typeof value === "function"
 }

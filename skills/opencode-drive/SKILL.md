@@ -142,6 +142,22 @@ Write a script and pass it with `--script`:
 opencode-drive start --name auto-stop-reproduction --script ./reproduce-stale-exploring-empty.ts
 ```
 
+Scripts can export a `setup` function to seed the simulated project before
+OpenCode starts:
+
+```ts
+import { join } from "node:path"
+import { defineScript, type ScriptSetupContext } from "opencode-drive"
+
+export async function setup({ directory }: ScriptSetupContext) {
+  await Bun.write(join(directory, "src", "example.ts"), "export const value = 1\n")
+}
+
+export default defineScript(async ({ ui }) => {
+  await ui.typeText("Open src/example.ts")
+})
+```
+
 You can see some example scripts here:
 
 * https://raw.githubusercontent.com/jlongster/opencode-drive/refs/heads/main/examples/two-turn-recording.ts

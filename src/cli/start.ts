@@ -5,7 +5,8 @@ import { connectSimulation } from "../client/index.js"
 import { exportRecording } from "../recording/index.js"
 import { connectMockBackend } from "./mock-backend.js"
 import { createResponseSettings } from "./response-generator.js"
-import { runScript } from "./script.js"
+import { loadScript, runScript } from "./script.js"
+import type { DriveScript } from "./script.js"
 import { listenControl } from "./control.js"
 import {
   controlPath,
@@ -21,15 +22,16 @@ import type { StartOptions } from "./types.js"
 export async function start(options: StartOptions) {
   if (!options.visible && !options.script && !options.daemon)
     return startDetached(options)
+  const script = options.script ? await loadScript(options.script) : undefined
   const responses = createResponseSettings()
   const instance = await launchInstance({
     name: options.name,
     command: options.command,
     dev: options.dev,
-    state: options.state,
     scripted: options.script !== undefined,
     visible: options.visible,
     record: options.record,
+    setup: script?.setup,
   })
   await register({
     version: 1,
@@ -102,7 +104,9 @@ export async function start(options: StartOptions) {
           driveReady = false
           await instance.restart()
           recording = undefined
-          current = run(options, instance, responses, (path) => screenshots.push(path))
+          current = run(options, instance, responses, script?.run, (path) =>
+            screenshots.push(path),
+          )
           await current.ready
           driveReady = true
           await markReady(options.name, process.pid)
@@ -119,7 +123,9 @@ export async function start(options: StartOptions) {
         return responses.update(input)
       },
     })
-    current = run(options, instance, responses, (path) => screenshots.push(path))
+    current = run(options, instance, responses, script?.run, (path) =>
+      screenshots.push(path),
+    )
     await current.ready
     driveReady = true
     await markReady(options.name, process.pid)
@@ -213,7 +219,6 @@ async function startDetached(options: StartOptions) {
       options.name,
       ...(options.script ? ["--script", options.script] : []),
       ...(options.dev ? ["--dev", options.dev] : []),
-      ...(options.state ? ["--state", options.state] : []),
       ...(options.record ? ["--record"] : []),
       ...(options.command.length ? ["--", ...options.command] : []),
     ],
@@ -261,6 +266,7 @@ function run(
   options: StartOptions,
   instance: Awaited<ReturnType<typeof launchInstance>>,
   responses: ReturnType<typeof createResponseSettings>,
+  driveScript: DriveScript | undefined,
   onScreenshot: (path: string) => void,
 ) {
   const abort = new AbortController()
@@ -274,9 +280,9 @@ function run(
     ready: readiness,
     promise: (async () => {
       await instance.waitForDrive("both")
-      if (options.script) {
+      if (driveScript) {
         const script = runScript(
-          options.script,
+          driveScript,
           instance.artifacts,
           instance.endpoints,
           abort.signal,
