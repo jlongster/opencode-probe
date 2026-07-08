@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
   "name": "opencode-drive",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Drive real and simulated OpenCode instances",
   "license": "MIT",
   "type": "module",

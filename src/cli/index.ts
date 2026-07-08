@@ -2,6 +2,7 @@
 import { NodeRuntime, NodeServices } from "@effect/platform-node"
 import { Effect, Option } from "effect"
 import { Command, Flag } from "effect/unstable/cli"
+import packageJson from "../../package.json" with { type: "json" }
 import { api } from "./api.js"
 import { extractCommands } from "./parse.js"
 import { list } from "./list.js"
@@ -150,7 +151,7 @@ const root = Command.make("opencode-drive").pipe(
   ]),
 )
 
-Command.runWith(root, { version: "0.1.0" })(extracted.args).pipe(
+Command.runWith(root, { version: packageJson.version })(extracted.args).pipe(
   Effect.provide(NodeServices.layer),
   NodeRuntime.runMain,
 )
