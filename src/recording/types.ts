@@ -47,4 +47,11 @@ export interface TimelineOutput {
   data: string
 }
 
-export type TimelineRecord = TimelineHeader | TimelineOutput
+export interface TimelineResize {
+  type: "resize"
+  at_ms: number
+  cols: number
+  rows: number
+}
+
+export type TimelineRecord = TimelineHeader | TimelineOutput | TimelineResize

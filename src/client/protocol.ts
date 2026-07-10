@@ -7,6 +7,7 @@ import type {
   UiElement,
   UiKeyModifiers,
   UiState,
+  UiViewport,
 } from "../script/types.js"
 
 const JsonRpcID = Schema.Union([Schema.String, Schema.Number, Schema.Null])
@@ -89,6 +90,11 @@ export namespace Frontend {
       x: Schema.Number,
       y: Schema.Number,
     }),
+    Schema.Struct({
+      type: Schema.Literal("ui.resize"),
+      cols: Schema.Number,
+      rows: Schema.Number,
+    }),
   ])
   export type Action = UiAction
 
@@ -157,6 +163,12 @@ export namespace Frontend {
   })
   export interface ClickParams extends Schema.Schema.Type<typeof ClickParams> {}
 
+  export const ResizeParams = Schema.Struct({
+    cols: Schema.Number,
+    rows: Schema.Number,
+  })
+  export type ResizeParams = UiViewport
+
   export const Request = Schema.Union([
     Schema.Struct({
       ...JsonRpc.RequestFields,
@@ -182,6 +194,11 @@ export namespace Frontend {
       ...JsonRpc.RequestFields,
       method: Schema.Literal("ui.click"),
       params: ClickParams,
+    }),
+    Schema.Struct({
+      ...JsonRpc.RequestFields,
+      method: Schema.Literal("ui.resize"),
+      params: ResizeParams,
     }),
     Schema.Struct({
       ...JsonRpc.RequestFields,

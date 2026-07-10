@@ -24,6 +24,18 @@ async function recording(events: Array<[number, string]>, cols = 12, rows = 3) {
   return path
 }
 
+async function timeline(records: Array<Record<string, unknown>>, cols = 12, rows = 3) {
+  const directory = await mkdtemp(join(tmpdir(), "drive-replay-test-"))
+  directories.push(directory)
+  const path = join(directory, "timeline.jsonl")
+  const lines = [
+    JSON.stringify({ type: "header", version: 1, cols, rows, encoding: "base64" }),
+    ...records.map((record) => JSON.stringify(record)),
+  ]
+  await writeFile(path, `${lines.join("\n")}\n`)
+  return path
+}
+
 function lineText(frame: Awaited<ReturnType<typeof replayRecording>>[number]["frame"], row = 0) {
   return frame.lines[row]!.spans.map((span) => span.text).join("").trimEnd()
 }
@@ -46,6 +58,22 @@ describe("replayRecording", () => {
     expect(frames).toHaveLength(21)
     expect(frames.map((frame) => frame.atMs)).toEqual(Array.from({ length: 21 }, (_, index) => index * 50))
     expect(frames.every((frame) => lineText(frame.frame) === "ready")).toBe(true)
+  })
+
+  test("resizes the terminal during replay", async () => {
+    const frames = await replayRecording(
+      await timeline([
+        { type: "output", at_ms: 0, data: Buffer.from("A").toString("base64") },
+        { type: "resize", at_ms: 100, cols: 8, rows: 4 },
+        { type: "output", at_ms: 100, data: Buffer.from("B").toString("base64") },
+      ], 4, 2),
+      { fps: 10 },
+    )
+    expect(frames.map((frame) => [frame.atMs, frame.frame.cols, frame.frame.rows])).toEqual([
+      [0, 4, 2],
+      [100, 8, 4],
+    ])
+    expect(lineText(frames.at(-1)!.frame)).toBe("AB")
   })
 
   test("does not expose a synchronized update before its closing wrapper", async () => {

@@ -61,6 +61,7 @@ export async function start(options: StartOptions) {
     scripted: options.script !== undefined,
     visible: options.visible,
     record: options.record,
+    viewport: script?.viewport,
     setup: script?.setup,
     log: logSuccess,
   }).catch(async (error) => {

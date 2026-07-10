@@ -3,7 +3,7 @@ import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { ensureMediaDirectory } from "./media.js"
 import { createScriptFileSystem } from "../script/filesystem.js"
-import type { JsonObject, ScriptSetup } from "../script/types.js"
+import type { JsonObject, ScriptSetup, UiViewport } from "../script/types.js"
 
 export interface LaunchOptions {
   readonly artifacts: string
@@ -13,6 +13,7 @@ export interface LaunchOptions {
   readonly scripted?: boolean
   readonly visible?: boolean
   readonly record?: boolean
+  readonly viewport?: UiViewport
   readonly env?: Readonly<Record<string, string>>
   readonly setup?: ScriptSetup
   readonly log?: (message: string) => void
@@ -69,12 +70,14 @@ export async function launchInstance(options: LaunchOptions) {
     driveName = options.name,
     driveEndpoints = endpoints,
     driveRecording = recording,
+    driveViewport?: UiViewport,
   ) =>
     Bun.write(
       join(drive, `${driveName}.json`),
       `${JSON.stringify(
         {
           endpoints: driveEndpoints,
+          ...(driveViewport ? { viewport: driveViewport } : {}),
           ...(driveRecording ? { recording: { timeline: driveRecording.timeline } } : {}),
         },
         undefined,
@@ -133,7 +136,7 @@ export async function launchInstance(options: LaunchOptions) {
   let serverStarting = false
   let serverStopping = false
   if (!options.scripted) {
-    await writeDriveManifest()
+    await writeDriveManifest(options.name, endpoints, recording, options.viewport)
     options.log?.("launching OpenCode")
     child = spawn()
   }
@@ -199,7 +202,7 @@ export async function launchInstance(options: LaunchOptions) {
     },
     async launchClient(
       clientName: string,
-      clientOptions: { readonly record?: boolean } = {},
+      clientOptions: { readonly record?: boolean; readonly viewport?: UiViewport } = {},
     ) {
       if (!options.scripted) throw new Error("clients.launch is only available in scripted mode")
       if (!serverStarted) throw new Error("launch the script server before launching clients")
@@ -223,7 +226,7 @@ export async function launchInstance(options: LaunchOptions) {
           : primary
             ? recording
             : undefined
-        await writeDriveManifest(driveName, clientEndpoints, clientRecording)
+        await writeDriveManifest(driveName, clientEndpoints, clientRecording, clientOptions.viewport ?? options.viewport)
         const launched = spawn(driveName, command, `client-${clientName}`)
         clients.set(clientName, launched)
         void launched.exited.then(() => {
@@ -277,7 +280,7 @@ export async function launchInstance(options: LaunchOptions) {
         }
         recording = options.record ? recordingPaths(media) : undefined
         if (!options.scripted) {
-          await writeDriveManifest()
+          await writeDriveManifest(options.name, endpoints, recording, options.viewport)
           options.log?.("launching OpenCode")
           child = spawn()
           await Promise.all([

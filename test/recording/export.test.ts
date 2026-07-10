@@ -26,6 +26,29 @@ test("exports the final frame as a PNG and creates its parent", async () => {
   expect((await stat(output)).size).toBeGreaterThan(100)
 })
 
+test("exports resized recordings on a stable maximum-size canvas", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "drive-export-resize-test-"))
+  directories.push(directory)
+  const timeline = join(directory, "timeline.jsonl")
+  await writeFile(
+    timeline,
+    [
+      JSON.stringify({ type: "header", version: 1, cols: 8, rows: 4, encoding: "base64" }),
+      JSON.stringify({ type: "output", at_ms: 0, data: Buffer.from("wide").toString("base64") }),
+      JSON.stringify({ type: "resize", at_ms: 100, cols: 4, rows: 2 }),
+      JSON.stringify({ type: "output", at_ms: 100, data: Buffer.from("small").toString("base64") }),
+      "",
+    ].join("\n"),
+  )
+  const output = join(directory, "frame.png")
+  const result = await exportRecording(timeline, output)
+  const data = await readFile(output)
+
+  expect(result).toEqual({ frames: 3, durationMs: 100, width: 80, height: 80 })
+  expect(data.readUInt32BE(16)).toBe(80)
+  expect(data.readUInt32BE(20)).toBe(80)
+})
+
 if (Bun.which("ffmpeg")) {
   test("exports sampled frames as an H.264 MP4 when ffmpeg is available", async () => {
     const directory = await mkdtemp(join(tmpdir(), "drive-export-ffmpeg-test-"))

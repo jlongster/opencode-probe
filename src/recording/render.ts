@@ -23,8 +23,15 @@ function color(rgb: number, alpha = 1) {
   return `rgba(${(rgb >> 16) & 255}, ${(rgb >> 8) & 255}, ${rgb & 255}, ${alpha})`
 }
 
-export function renderFrame(frame: CapturedFrame): Buffer {
-  const canvas = createCanvas(frame.cols * CellWidth, frame.rows * CellHeight)
+export interface RenderFrameOptions {
+  readonly cols?: number
+  readonly rows?: number
+}
+
+export function renderFrame(frame: CapturedFrame, options: RenderFrameOptions = {}): Buffer {
+  const cols = Math.max(frame.cols, options.cols ?? frame.cols)
+  const rows = Math.max(frame.rows, options.rows ?? frame.rows)
+  const canvas = createCanvas(cols * CellWidth, rows * CellHeight)
   const context = canvas.getContext("2d")
   context.fillStyle = "#080808"
   context.fillRect(0, 0, canvas.width, canvas.height)

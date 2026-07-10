@@ -834,7 +834,7 @@ describe("opencode-drive", () => {
     expect(await Bun.file(join(root, "registry", `${name}.json`)).exists()).toBe(false)
   })
 
-  test("routes title requests outside the normal LLM response sequence", async () => {
+  test.each(["title-requests", "latest-title-requests"])("routes %s outside the normal LLM response sequence", async (mode) => {
     const root = await temporary()
     const child = spawn(
       [
@@ -846,7 +846,7 @@ describe("opencode-drive", () => {
         "--",
         process.execPath,
         fixture("fake-opencode.ts"),
-        "title-requests",
+        mode,
       ],
       root,
     )

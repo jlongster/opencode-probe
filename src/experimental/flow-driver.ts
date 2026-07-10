@@ -198,13 +198,26 @@ function isTitleRequest(request: OpenedExchange) {
     return false
   const messages = request.body.messages
   if (!Array.isArray(messages)) return false
-  const first = messages[0]
-  if (typeof first !== "object" || first === null || !("content" in first))
-    return false
-  return (
-    typeof first.content === "string" &&
-    first.content.includes("You are a title generator")
-  )
+  const first = messages.find(isMessage)
+  if (first?.role === "user" && messageContent(first)?.startsWith("Generate a title for this conversation:")) return true
+  return messages.some((message) => messageContent(message)?.includes("You are a title generator"))
+}
+
+function isMessage(value: unknown): value is { readonly role?: unknown; readonly content?: unknown } {
+  return typeof value === "object" && value !== null && "content" in value
+}
+
+function messageContent(message: unknown): string | undefined {
+  if (!isMessage(message)) return undefined
+  if (typeof message.content === "string") return message.content
+  if (!Array.isArray(message.content)) return undefined
+  return message.content
+    .map((part) => {
+      if (typeof part === "string") return part
+      if (typeof part === "object" && part !== null && "text" in part && typeof part.text === "string") return part.text
+      return ""
+    })
+    .join("")
 }
 
 function isSubagentRequest(request: OpenedExchange) {

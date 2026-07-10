@@ -1,5 +1,5 @@
 import { createReadStream } from "node:fs"
-import type { TimelineHeader, TimelineOutput, TimelineRecord } from "./types.js"
+import type { TimelineHeader, TimelineOutput, TimelineRecord, TimelineResize } from "./types.js"
 
 function fail(line: number, message: string): never {
   throw new Error(`Invalid recording timeline at line ${line}: ${message}`)
@@ -47,11 +47,19 @@ function parseRecord(text: string, line: number, first: boolean, previousAt: num
     return { type: "header", version: 1, cols: value.cols, rows: value.rows, encoding: "base64" } satisfies TimelineHeader
   }
 
-  if (!hasExactKeys(value, ["at_ms", "data", "type"]) || value.type !== "output") fail(line, "invalid output fields")
   if (!nonnegativeInteger(value.at_ms)) fail(line, "at_ms must be a nonnegative integer")
-  if (value.at_ms < previousAt) fail(line, "output timestamps must be nondecreasing")
-  if (typeof value.data !== "string" || !canonicalBase64(value.data)) fail(line, "data must be canonical base64")
-  return { type: "output", at_ms: value.at_ms, data: value.data } satisfies TimelineOutput
+  if (value.at_ms < previousAt) fail(line, "event timestamps must be nondecreasing")
+  if (value.type === "output") {
+    if (!hasExactKeys(value, ["at_ms", "data", "type"])) fail(line, "invalid output fields")
+    if (typeof value.data !== "string" || !canonicalBase64(value.data)) fail(line, "data must be canonical base64")
+    return { type: "output", at_ms: value.at_ms, data: value.data } satisfies TimelineOutput
+  }
+  if (value.type === "resize") {
+    if (!hasExactKeys(value, ["at_ms", "cols", "rows", "type"])) fail(line, "invalid resize fields")
+    if (!positiveInteger(value.cols) || !positiveInteger(value.rows)) fail(line, "cols and rows must be positive integers")
+    return { type: "resize", at_ms: value.at_ms, cols: value.cols, rows: value.rows } satisfies TimelineResize
+  }
+  return fail(line, "invalid event type")
 }
 
 /** Decodes and validates a timeline without loading the complete file into memory. */
@@ -68,7 +76,7 @@ export async function* decodeTimeline(path: string): AsyncGenerator<TimelineReco
     if (text.length === 0) fail(line, "empty lines are not allowed")
     const record = parseRecord(text, line, records === 0, previousAt)
     records++
-    if (record.type === "output") previousAt = record.at_ms
+    if (record.type !== "header") previousAt = record.at_ms
     return record
   }
 

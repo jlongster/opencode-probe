@@ -27,6 +27,7 @@ import type {
   UiPredicate,
   UiState,
   UiWaitOptions,
+  UiViewport,
 } from "../script/types.js"
 
 export async function loadScript(file: string): Promise<ScriptDefinition> {
@@ -47,7 +48,7 @@ export async function runScript(
   killServer: () => Promise<void>,
   launchClient: (
     name: string,
-    options?: { readonly record?: boolean },
+    options?: { readonly record?: boolean; readonly viewport?: UiViewport },
   ) => Promise<{
     readonly endpoints: { readonly ui: string }
     readonly child: { readonly exited: Promise<number> }
@@ -83,7 +84,10 @@ export async function runScript(
   const clients: ScriptClients = {
     async launch(name, options) {
       if (connected.has(name)) throw new Error(`client "${name}" is already connected`)
-      const launched = await launchClient(name, options)
+      const launched = await launchClient(name, {
+        ...options,
+        viewport: options?.viewport ?? script.viewport,
+      })
       let intentional = false
       void launched.child.exited.then((status) => {
         if (!closing && !intentional) clientExit.resolve({ name, status })
@@ -208,7 +212,7 @@ export async function runScript(
       "launch" in script
         ? Promise.resolve(script.run({ ...context, ui: null }))
         : Promise.resolve(
-            script.run({ ...context, ui: await clients.launch("default") }),
+            script.run({ ...context, ui: await clients.launch("default", { viewport: script.viewport }) }),
           )
     const result = await Promise.race([
       execution.then(() => ({ script: true as const })),
@@ -306,6 +310,10 @@ class ScriptUiClient implements ScriptUi {
         position?.y ?? Math.floor(element.height / 2),
       ),
     )
+  }
+
+  resize(viewport: UiViewport): Promise<UiState> {
+    return this.failOnTimeout(this.client.resize(viewport))
   }
 
   async submit(text: string): Promise<UiState> {
@@ -674,18 +682,41 @@ function isTitleRequest(request: LlmRequest) {
   if (!isJsonObject(body)) return false
   const messages = body.messages
   if (!Array.isArray(messages)) return false
+  const first = messages.find(isMessageObject)
+  const firstContent = messageContent(first)
+  if (
+    first?.role === "user" &&
+    firstContent?.startsWith("Generate a title for this conversation:")
+  )
+    return true
   const system = messages.find(
-    (message) => isJsonObject(message) && message.role === "system",
+    (message) => isMessageObject(message) && message.role === "system",
   )
   return (
-    isJsonObject(system) &&
-    typeof system.content === "string" &&
-    system.content.startsWith("You are a title generator.")
+    messageContent(system)?.startsWith("You are a title generator.") ?? false
   )
 }
 
+function isMessageObject(value: unknown) {
+  return isJsonObject(value) && typeof value.role === "string"
+}
+
+function messageContent(message: unknown): string | undefined {
+  if (!isJsonObject(message)) return undefined
+  const content = message.content
+  if (typeof content === "string") return content
+  if (!Array.isArray(content)) return undefined
+  return content
+    .map((part) => {
+      if (typeof part === "string") return part
+      if (isJsonObject(part) && typeof part.text === "string") return part.text
+      return ""
+    })
+    .join("")
+}
+
 function isJsonObject(
-  value: JsonValue | undefined,
+  value: unknown,
 ): value is { readonly [key: string]: JsonValue } {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }

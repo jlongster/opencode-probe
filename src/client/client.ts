@@ -44,6 +44,10 @@ type Methods = {
     readonly params: Frontend.ClickParams
     readonly result: Frontend.State
   }
+  readonly "ui.resize": {
+    readonly params: Frontend.ResizeParams
+    readonly result: Frontend.State
+  }
 }
 
 type MethodName = keyof Methods
@@ -250,7 +254,9 @@ export class SimulationClient {
     return this.call("ui.click", { target, x, y })
   }
 
-  // ── lifecycle ─────────────────────────────────────────────────────────
+  resize(viewport: Frontend.ResizeParams): Promise<Frontend.State> {
+    return this.call("ui.resize", viewport)
+  }
 
   close(): void {
     this.socket.terminate()

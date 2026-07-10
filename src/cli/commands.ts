@@ -14,6 +14,10 @@ export const commandInfo = {
     description: "Focus an element using JSON params",
   },
   "ui.click": { value: true, description: "Click using JSON params" },
+  "ui.resize": {
+    value: true,
+    description: "Resize terminal viewport using JSON params",
+  },
   "ui.screenshot": {
     value: false,
     description: "Take a screenshot and return its path",
@@ -39,6 +43,7 @@ export function commandAcceptsValue(operation: string) {
   if (operation === "ui.arrow") return commandInfo[operation].value
   if (operation === "ui.focus") return commandInfo[operation].value
   if (operation === "ui.click") return commandInfo[operation].value
+  if (operation === "ui.resize") return commandInfo[operation].value
   if (operation === "ui.screenshot") return commandInfo[operation].value
   if (operation === "ui.state") return commandInfo[operation].value
   if (operation === "ui.matches") return commandInfo[operation].value
@@ -140,6 +145,16 @@ async function execute(
       if (request.method !== "ui.click")
         throw new Error("invalid ui.click params")
       return ui.click(request.params.target, request.params.x, request.params.y)
+    }
+    case "ui.resize": {
+      const request = Frontend.decodeRequest({
+        jsonrpc: "2.0",
+        method: "ui.resize",
+        params: json(required(command)),
+      })
+      if (request.method !== "ui.resize")
+        throw new Error("invalid ui.resize params")
+      return ui.resize(request.params)
     }
     case "ui.screenshot":
       return ui.screenshot()

@@ -34,12 +34,13 @@ export async function replay(path: string, options: InternalReplayOptions = {}):
     const next = await records.next()
     if (next.done) break
     const event = next.value
-    if (event.type !== "output") throw new Error("Recording timeline contains a second header")
+    if (event.type === "header") throw new Error("Recording timeline contains a second header")
     while (nextSample < event.at_ms) {
       frames.push({ atMs: nextSample, frame: terminal.snapshot() })
       nextSample += interval
     }
-    terminal.write(Buffer.from(event.data, "base64"))
+    if (event.type === "output") terminal.write(Buffer.from(event.data, "base64"))
+    else terminal.resize(event.cols, event.rows)
     finalAt = event.at_ms
   }
   terminal.finish()

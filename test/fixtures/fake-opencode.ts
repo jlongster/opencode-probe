@@ -84,11 +84,9 @@ const backend = role === "client" ? undefined : Bun.serve({
       }
       if (request.method.startsWith("llm.") && process.env.OPENCODE_TEST_HOME) {
         const events = `${process.env.OPENCODE_TEST_HOME}/backend-events.jsonl`
-        await Bun.write(
+        await appendFile(
           events,
-          `${await Bun.file(events)
-            .text()
-            .catch(() => "")}${JSON.stringify({ method: request.method, params: request.params })}\n`,
+          `${JSON.stringify({ method: request.method, params: request.params })}\n`,
         )
       }
       const result =
@@ -111,6 +109,29 @@ const backend = role === "client" ? undefined : Bun.serve({
                     {
                       role: "system",
                       content: "You are a title generator. You output ONLY a thread title.",
+                    },
+                  ],
+                },
+              },
+            }),
+          )
+        if (process.argv.includes("latest-title-requests"))
+          socket.send(
+            JSON.stringify({
+              jsonrpc: "2.0",
+              method: "llm.request",
+              params: {
+                id: "ex_title",
+                url: "https://api.openai.com/v1/chat/completions",
+                body: {
+                  messages: [
+                    {
+                      role: "user",
+                      content: "Generate a title for this conversation:\n",
+                    },
+                    {
+                      role: "user",
+                      content: "Show a compact status report for the viewport resize demo.",
                     },
                   ],
                 },

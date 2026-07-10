@@ -47,12 +47,14 @@ export async function exportRecording(
 ): Promise<ExportRecordingResult> {
   const frames = await replayRecording(timelinePath, options)
   const final = frames.at(-1)!
+  const cols = Math.max(...frames.map((sample) => sample.frame.cols))
+  const rows = Math.max(...frames.map((sample) => sample.frame.rows))
   const extension = extname(outputPath).toLowerCase()
   const progress = progressReporter(options.onProgress)
   await mkdir(dirname(outputPath), { recursive: true })
 
   if (extension === ".png") {
-    await writeFile(outputPath, renderFrame(final.frame))
+    await writeFile(outputPath, renderFrame(final.frame, { cols, rows }))
     progress(100)
   } else if (extension === ".mp4") {
     const directory = await mkdtemp(join(tmpdir(), "opencode-drive-recording-"))
@@ -63,7 +65,7 @@ export async function exportRecording(
         let rendered = unique.get(hash)
         if (!rendered) {
           rendered = join(directory, `unique-${hash}.png`)
-          await writeFile(rendered, renderFrame(sample.frame))
+          await writeFile(rendered, renderFrame(sample.frame, { cols, rows }))
           unique.set(hash, rendered)
         }
         await linkOrCopy(rendered, join(directory, `frame-${String(index).padStart(8, "0")}.png`))
@@ -96,8 +98,8 @@ export async function exportRecording(
   return {
     frames: frames.length,
     durationMs: final.atMs,
-    width: final.frame.cols * 10,
-    height: final.frame.rows * 20,
+    width: cols * 10,
+    height: rows * 20,
   }
 }
 

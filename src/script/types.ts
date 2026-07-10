@@ -84,6 +84,11 @@ export interface UiPosition {
   readonly y: number
 }
 
+export interface UiViewport {
+  readonly cols: number
+  readonly rows: number
+}
+
 export type UiPredicate = (state: UiState) => boolean | Promise<boolean>
 
 export interface ScriptUi {
@@ -100,6 +105,7 @@ export interface ScriptUi {
   focus(target: number | UiElement): Promise<UiState>
   /** Clicks the element center unless a local position is provided. */
   click(target: number | UiElement, position?: UiPosition): Promise<UiState>
+  resize(viewport: UiViewport): Promise<UiState>
   submit(text: string): Promise<UiState>
 
   waitFor(matcher: UiMatcher, options?: UiWaitOptions): Promise<UiState>
@@ -240,6 +246,8 @@ export interface ScriptClients {
 export interface ScriptClientOptions {
   /** Records this client and exports an MP4 before it is killed. */
   readonly record?: boolean
+  /** Initial terminal viewport for this client. */
+  readonly viewport?: UiViewport
 }
 
 export interface ScriptServer {
@@ -275,6 +283,8 @@ export type ManualScriptRun = (
 export interface AutomaticScriptDefinition {
   /** Runs once before OpenCode starts. */
   readonly setup?: ScriptSetup
+  /** Initial terminal viewport for the default client. */
+  readonly viewport?: UiViewport
   /** Runs after the UI and LLM connections are ready, and again after restart. */
   readonly run: ScriptRun
 }
@@ -284,6 +294,8 @@ export interface ManualScriptDefinition {
   readonly launch: "manual"
   /** Runs once before OpenCode starts. */
   readonly setup?: ScriptSetup
+  /** Initial terminal viewport for clients that do not specify one. */
+  readonly viewport?: UiViewport
   /** Runs after the shared service and LLM connection are ready. */
   readonly run: ManualScriptRun
 }
