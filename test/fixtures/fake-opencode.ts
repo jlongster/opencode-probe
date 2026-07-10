@@ -1,45 +1,14 @@
 const serviceMode = process.env.OPENCODE_DRIVE_SCRIPTED === "1"
-const operation = process.argv[2]
-if (
-  serviceMode &&
-  process.argv.at(-2) === "service" &&
-  process.argv.at(-1) === "start"
-) {
-  const service = Bun.spawn([
-    process.execPath,
-    process.argv[1]!,
-    ...process.argv.slice(2, -2),
-    "__service",
-  ], {
-    cwd: process.cwd(),
-    env: process.env,
-    stdin: "ignore",
-    stdout: "ignore",
-    stderr: "ignore",
-  })
-  service.unref()
-  process.exit(0)
-}
-if (
-  serviceMode &&
-  process.argv.at(-2) === "service" &&
-  process.argv.at(-1) === "stop"
-) {
-  const pid = Number(
-    await Bun.file(`${process.env.OPENCODE_TEST_HOME}/service.pid`)
-      .text()
-      .catch(() => ""),
-  )
-  if (Number.isInteger(pid)) process.kill(pid, "SIGTERM")
-  process.exit(0)
-}
 const role = serviceMode
-  ? process.argv.at(-1) === "__service"
+  ? process.argv.at(-2) === "serve" && process.argv.at(-1) === "--service"
     ? "service"
     : "client"
   : "legacy"
 if (role === "service" && process.env.OPENCODE_TEST_HOME)
-  await Bun.write(`${process.env.OPENCODE_TEST_HOME}/service.pid`, String(process.pid))
+  await Promise.all([
+    Bun.write(`${process.env.OPENCODE_TEST_HOME}/service.pid`, String(process.pid)),
+    Bun.write(`${process.env.OPENCODE_TEST_HOME}/service-argv.json`, JSON.stringify(process.argv.slice(2))),
+  ])
 
 const screen = { value: `Fake OpenCode${role === "client" ? ` ${process.env.OPENCODE_DRIVE}` : ""}` }
 const drive = await resolveDrive()

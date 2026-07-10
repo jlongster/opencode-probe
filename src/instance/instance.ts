@@ -118,6 +118,7 @@ export async function launchInstance(options: LaunchOptions) {
   let child: ReturnType<typeof spawn> | undefined
   const clients = new Map<string, Bun.Subprocess>()
   const launching = new Set<string>()
+  let serverChild: Bun.Subprocess | undefined
   let serverStarted = false
   let serverStarting = false
   let serverStopping = false
@@ -148,26 +149,19 @@ export async function launchInstance(options: LaunchOptions) {
           ui: `ws://127.0.0.1:${await freePort()}`,
           backend: endpoints.backend,
         }, undefined)
-        const service = spawn(
+        serverChild = spawn(
           serviceName,
-          [...command, "service", "start"],
-          "service-start",
+          [...command, "serve", "--service"],
+          "service",
         )
-        const status = await service.exited
-        if (status !== 0)
-          throw new Error(`OpenCode service start exited with status ${status}`)
-        child = service
+        child = serverChild
         await waitForWebSocket(
           endpoints.backend,
-          new Promise<number>(() => undefined),
+          serverChild.exited,
           60_000,
         ).catch(async (error) => {
-          const stopped = spawn(
-            serviceName,
-            [...command, "service", "stop"],
-            "service-stop",
-          )
-          await stopped.exited.catch(() => undefined)
+          await terminate(serverChild!)
+          serverChild = undefined
           throw error
         })
         serverStarted = true
@@ -182,14 +176,8 @@ export async function launchInstance(options: LaunchOptions) {
         throw new Error("the script server is not running")
       serverStopping = true
       try {
-        const stopped = spawn(
-          serviceName,
-          [...command, "service", "stop"],
-          "service-stop",
-        )
-        const status = await stopped.exited
-        if (status !== 0)
-          throw new Error(`OpenCode service stop exited with status ${status}`)
+        await terminate(serverChild!)
+        serverChild = undefined
         serverStarted = false
       } finally {
         serverStopping = false
@@ -262,8 +250,8 @@ export async function launchInstance(options: LaunchOptions) {
           await Promise.all([...clients.values()].map(terminate))
           clients.clear()
           if (serverStarted) {
-            const stopped = spawn(serviceName, [...command, "service", "stop"], "service-stop")
-            await stopped.exited.catch(() => undefined)
+            await terminate(serverChild!)
+            serverChild = undefined
             serverStarted = false
             child = undefined
           }
@@ -302,14 +290,7 @@ export async function launchInstance(options: LaunchOptions) {
         if (restarting) await restarting.catch(() => undefined)
         await Promise.all([...clients.values()].map(terminate))
         if (!options.scripted) await terminate(this.child)
-        if (options.scripted && serverStarted) {
-          const stopped = spawn(
-            serviceName,
-            [...command, "service", "stop"],
-            "service-stop",
-          )
-          await stopped.exited.catch(() => undefined)
-        }
+        if (options.scripted && serverStarted) await terminate(serverChild!)
         await stopService(join(artifacts, "home", ".local", "state"))
       })()
       return stopping

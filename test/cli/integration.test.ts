@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { mkdir, mkdtemp, readdir, rm } from "node:fs/promises"
+import { mkdir, mkdtemp, readdir, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import {
@@ -497,7 +497,13 @@ describe("opencode-drive", () => {
     expect(await Bun.file(join(artifacts, "seeded-at-launch.txt")).text()).toBe(
       "export const seeded = true\n",
     )
-    expect(await Bun.file(join(artifacts, "child-cwd.txt")).text()).toBe(join(artifacts, "files"))
+    expect(await realpath(await Bun.file(join(artifacts, "child-cwd.txt")).text())).toBe(
+      await realpath(join(artifacts, "files")),
+    )
+    expect(await Bun.file(join(artifacts, "service-argv.json")).json()).toEqual([
+      "serve",
+      "--service",
+    ])
     const pid = Number(await Bun.file(join(artifacts, "child.pid")).text())
     expect(running(pid)).toBe(false)
     expect(await Bun.file(join(root, "registry", `${name}.json`)).exists()).toBe(false)
