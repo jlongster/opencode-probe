@@ -66,7 +66,8 @@ Scripted runs use one fully typed definition:
 import { defineScript } from "opencode-drive"
 
 export default defineScript({
-  async setup({ fs }) {
+  async setup({ fs, config }) {
+    config.autoupdate = false
     await fs.writeFile("src/example.ts", "export const value = 1\n")
   },
   async run({ ui, llm }) {

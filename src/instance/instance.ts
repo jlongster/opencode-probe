@@ -3,7 +3,7 @@ import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { ensureMediaDirectory } from "./media.js"
 import { createScriptFileSystem } from "../script/filesystem.js"
-import type { ScriptSetup } from "../script/types.js"
+import type { JsonObject, ScriptSetup } from "../script/types.js"
 
 export interface LaunchOptions {
   readonly artifacts: string
@@ -62,6 +62,7 @@ export async function launchInstance(options: LaunchOptions) {
   }
   const media = await ensureMediaDirectory()
   const files = join(artifacts, "files")
+  const configPath = join(files, ".opencode", "opencode.jsonc")
   let recording = options.record ? recordingPaths(media) : undefined
   const writeDriveManifest = (
     driveName = options.name,
@@ -79,7 +80,15 @@ export async function launchInstance(options: LaunchOptions) {
         2,
       )}\n`,
     )
-  await options.setup?.({ fs: createScriptFileSystem(files) })
+  if (options.setup) {
+    const configFile = Bun.file(configPath)
+    const config: JsonObject = await (await configFile.exists()
+      ? configFile
+      : Bun.file(new URL("./default-config.jsonc", import.meta.url))
+    ).json()
+    await options.setup({ fs: createScriptFileSystem(files), config })
+    await Bun.write(configPath, `${JSON.stringify(config, undefined, 2)}\n`)
+  }
   const environment = cleanEnv({
     ...process.env,
     ...options.env,

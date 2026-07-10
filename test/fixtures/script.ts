@@ -2,7 +2,8 @@ import { join } from "node:path"
 import { defineScript } from "../../src/index.js"
 
 export default defineScript({
-  async setup({ fs }) {
+  async setup({ fs, config }) {
+    config.autoupdate = false
     await fs.writeFile("src/seeded.ts", "export const seeded = true\n")
   },
 

@@ -6,6 +6,8 @@ export type JsonValue =
   | ReadonlyArray<JsonValue>
   | { readonly [key: string]: JsonValue }
 
+export type JsonObject = { [key: string]: JsonValue }
+
 export interface ScriptFileSystem {
   /** Writes inside the simulated project and creates parent directories. */
   writeFile(path: string, contents: string | Uint8Array): Promise<void>
@@ -226,6 +228,8 @@ export interface ScriptLlm {
 
 export interface ScriptSetupContext {
   readonly fs: ScriptFileSystem
+  /** The current OpenCode config object. Mutate it to customize the run. */
+  readonly config: JsonObject
 }
 
 export interface ScriptClients {

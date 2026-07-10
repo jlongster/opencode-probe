@@ -177,7 +177,8 @@ and `fs.writeFile` always writes inside the simulated project:
 import { defineScript } from "opencode-drive"
 
 export default defineScript({
-  async setup({ fs }) {
+  async setup({ fs, config }) {
+    config.autoupdate = false
     await fs.writeFile("src/example.ts", "export const value = 1\n")
   },
 
@@ -188,6 +189,12 @@ export default defineScript({
   },
 })
 ```
+
+`setup` receives the current OpenCode config object, which starts from the
+default drive config unless the prepared instance already has one. When a script
+needs custom config, mutate this `config` parameter instead of generating and
+writing a new config object from scratch, so the script keeps the default
+provider/model settings unless it intentionally changes them.
 
 Note that the simulated model is a GPT model type, and opencode uses the `patch` tool for working with files Do not use a `edit` or `write` tool to edit files.
 

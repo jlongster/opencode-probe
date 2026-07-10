@@ -587,6 +587,11 @@ describe("opencode-drive", () => {
     const artifacts = artifactPath(stderr)
     roots.push(artifacts)
     expect(await Bun.file(join(artifacts, "script-result.json")).json()).toMatchObject({ matches: true })
+    expect(await Bun.file(join(artifacts, "files", ".opencode", "opencode.jsonc")).json()).toMatchObject({
+      autoupdate: false,
+      model: "simulation/gpt-sim-model",
+      providers: { simulation: { models: { "gpt-sim-model": {} } } },
+    })
     const backendEvents = (await Bun.file(join(artifacts, "backend-events.jsonl")).text())
       .trim()
       .split("\n")
