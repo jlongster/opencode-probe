@@ -4,6 +4,8 @@ Status: exploratory implementation, settled call sites only
 
 This document records interface shapes that have been accepted during design. It intentionally omits unresolved alternatives rather than presenting them as competing proposals.
 
+Internal resource ownership and desugaring are documented in [OpenCode Driver Architecture](./open-code-driver-architecture.md).
+
 ## `make` constructs one scoped driver
 
 The primary interface is an ordinary Effect library constructor. It does not require `defineScript`, a default export, dynamic script loading, or Layer construction.
@@ -116,7 +118,7 @@ const program = Effect.scoped(
       },
     })
 
-    const secondary = yield* oc.clients.launch({
+    const secondary = yield* oc.clients.make({
       viewport: {
         cols: 120,
         rows: 40,
@@ -172,7 +174,7 @@ Keep the aggregate value only when driver-wide capabilities such as `clients` ar
 
 ```ts
 const oc = yield* OpenCodeDriver.make()
-const secondary = yield* oc.clients.launch()
+const secondary = yield* oc.clients.make()
 
 yield* oc.ui.screenshot("primary")
 yield* secondary.ui.screenshot("secondary")
@@ -326,7 +328,7 @@ Effect:
 
 ```ts
 const oc = yield* OpenCodeDriver.make()
-const secondary = yield* oc.clients.launch()
+const secondary = yield* oc.clients.make()
 
 yield* oc.ui.submit("Hello from the primary client")
 yield* secondary.ui.screenshot("secondary-view")
@@ -372,7 +374,7 @@ yield* ui.screenshot("home")
 - The `client` section configures one primary client.
 - The primary client's UI is exposed as `ui` and `oc.ui`.
 - The common case destructures `{ ui, llm }`.
-- `oc.clients.launch(options?)` creates additional clients on the same server.
+- `oc.clients.make(options?)` creates additional clients on the same server.
 - Additional clients expose their UI as `client.ui`.
 - Client identity is generated internally rather than supplied by callers.
 - `Llm` exposes pure constructors over manually composed Effect Schemas.
