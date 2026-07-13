@@ -23,6 +23,7 @@
     "src/client",
     "src/experimental",
     "src/instance",
+    "src/llm",
     "src/log.ts",
     "src/recording",
     "src/script",
