@@ -56,10 +56,10 @@ Remove artifact directories left by sessions that are no longer active:
 opencode-drive prune
 ```
 
-Prune one artifact directory by basename, or force removal of all `run-*` artifact directories:
+Prune one inactive instance's artifacts by instance name, or force removal of all artifact directories:
 
 ```sh
-opencode-drive prune --name run-abc123
+opencode-drive prune --name demo
 opencode-drive prune --force
 ```
 
