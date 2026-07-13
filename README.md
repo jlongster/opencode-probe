@@ -27,6 +27,8 @@ Install the skill file above and ask the agent to test various flows with the ap
 
 Screenshots and videos are written to `<system temp>/opencode-drive/output` with unique filenames. Set `OPENCODE_DRIVE_MEDIA_DIR` to use a different directory.
 
+Captured frames use Commit Mono at 16px in a fixed 10x20 cell grid. Set `OPENCODE_DRIVE_FONT` to a comma-separated list of font files (for example regular, bold, italic, and bold-italic faces) to use a different capture font without changing the cell geometry.
+
 ## UI development
 
 If you are doing UI development in OpenCode, you might want to run it in a simulated mode. This allows `opencode-drive` to drive it and always put it into a state that you want to see.

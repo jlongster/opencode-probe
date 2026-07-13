@@ -7,7 +7,7 @@
       "dependencies": {
         "@effect/platform-node": "4.0.0-beta.93",
         "@effect/platform-node-shared": "4.0.0-beta.93",
-        "@fontsource/adwaita-mono": "5.2.1",
+        "@fontsource/commit-mono": "5.2.5",
         "@napi-rs/canvas": "1.0.2",
         "@wterm/core": "0.3.0",
         "@wterm/ghostty": "0.3.0",
@@ -28,7 +28,7 @@
 
     "@effect/platform-node-shared": ["@effect/platform-node-shared@4.0.0-beta.93", "", { "dependencies": { "@types/ws": "^8.18.1", "ws": "^8.20.0" }, "peerDependencies": { "effect": "^4.0.0-beta.93" } }, "sha512-XUqZ2u5GglBqY8q2jj4Q7GjN5K/enedk8auZM9rY/l5a/myaQTrQp3QnvpIK4/Yg0WFjLGuctGPMKWRk3OLIrA=="],
 
-    "@fontsource/adwaita-mono": ["@fontsource/adwaita-mono@5.2.1", "", {}, "sha512-6+Q1UIvklJ9REijs6kv7YlRNt6yktRj0iW8H69YIugdD9P2h3eIX1AB8/9ICMfpVyVeywlsrCXg82y/LfRrjyg=="],
+    "@fontsource/commit-mono": ["@fontsource/commit-mono@5.2.5", "", {}, "sha512-htX8yQWtiPt5L1Hzh4sirvfUJT2+KYiquDB/Q2sY2tWQYplpBUOD5zHnIM3k36Hnm4V+JIIqA/wmwupSQ68WjA=="],
 
     "@ioredis/commands": ["@ioredis/commands@1.10.0", "", {}, "sha512-UmeW7z4LfctwoQ5wkhVzgq8tXkreED2xZGpX+Bg+zA+WJFZCT6c062AfCK/Dfk81xZnnwdhJCUMkitihRaoC2Q=="],
 

@@ -7,20 +7,51 @@ const CellHeight = 20
 const FontSize = 16
 const FontFamily = "OpenCode Mono"
 
-for (const file of [
-  "adwaita-mono-latin-400-normal.woff2",
-  "adwaita-mono-latin-700-normal.woff2",
-  "adwaita-mono-latin-400-italic.woff2",
-  "adwaita-mono-latin-700-italic.woff2",
-]) {
-  GlobalFonts.registerFromPath(
-    fileURLToPath(import.meta.resolve(`@fontsource/adwaita-mono/files/${file}`)),
-    FontFamily,
-  )
+const fontOverride = process.env["OPENCODE_DRIVE_FONT"]
+const fontFiles = fontOverride
+  ? fontOverride
+      .split(",")
+      .map((file) => file.trim())
+      .filter(Boolean)
+  : [
+      "commit-mono-latin-400-normal.woff2",
+      "commit-mono-latin-700-normal.woff2",
+      "commit-mono-latin-400-italic.woff2",
+      "commit-mono-latin-700-italic.woff2",
+    ].map((file) =>
+      fileURLToPath(import.meta.resolve(`@fontsource/commit-mono/files/${file}`)),
+    )
+
+if (fontFiles.length === 0)
+  throw new Error("OPENCODE_DRIVE_FONT must contain at least one font file")
+for (const file of fontFiles) {
+  if (!GlobalFonts.registerFromPath(file, FontFamily))
+    throw new Error(`Failed to register capture font: ${file}`)
 }
 
 function color(rgb: number, alpha = 1) {
   return `rgba(${(rgb >> 16) & 255}, ${(rgb >> 8) & 255}, ${rgb & 255}, ${alpha})`
+}
+
+const baselineCache = new Map<string, number>()
+
+type Measurable = {
+  measureText(text: string): {
+    readonly fontBoundingBoxAscent?: number
+    readonly fontBoundingBoxDescent?: number
+  }
+}
+
+function baselineOffset(context: Measurable, font: string) {
+  const cached = baselineCache.get(font)
+  if (cached !== undefined) return cached
+  const metrics = context.measureText("Mg")
+  const ascent = metrics.fontBoundingBoxAscent ?? FontSize * 0.8
+  const descent = metrics.fontBoundingBoxDescent ?? FontSize * 0.2
+  // Center the font's bounding box in the cell and return its alphabetic baseline.
+  const offset = (CellHeight - (ascent + descent)) / 2 + ascent
+  baselineCache.set(font, offset)
+  return offset
 }
 
 export interface RenderFrameOptions {
@@ -35,7 +66,7 @@ export function renderFrame(frame: CapturedFrame, options: RenderFrameOptions = 
   const context = canvas.getContext("2d")
   context.fillStyle = "#080808"
   context.fillRect(0, 0, canvas.width, canvas.height)
-  context.textBaseline = "top"
+  context.textBaseline = "alphabetic"
 
   frame.lines.forEach((line, row) => {
     let column = 0
@@ -52,9 +83,10 @@ export function renderFrame(frame: CapturedFrame, options: RenderFrameOptions = 
         if (!hidden) {
           const italic = span.attributes & TextStyle.italic ? "italic " : ""
           const weight = span.attributes & TextStyle.bold ? "700 " : "400 "
-          context.font = `${italic}${weight}${FontSize}px "${FontFamily}"`
+          const font = `${italic}${weight}${FontSize}px "${FontFamily}"`
+          context.font = font
           context.fillStyle = color(foreground, span.attributes & TextStyle.dim ? 0.55 : 1)
-          context.fillText(char, column * CellWidth, row * CellHeight + 1)
+          context.fillText(char, column * CellWidth, row * CellHeight + baselineOffset(context, font))
           if (span.attributes & TextStyle.underline) {
             context.fillRect(column * CellWidth, row * CellHeight + 17, cells * CellWidth, 1)
           }
