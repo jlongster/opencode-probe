@@ -13,6 +13,7 @@
     ".": "./src/index.ts",
     "./client": "./src/client/index.ts",
     "./experimental": "./src/experimental/index.ts",
+    "./llm": "./src/llm/index.ts",
     "./recording": "./src/recording/index.ts",
     "./script": "./src/script/index.ts"
   },

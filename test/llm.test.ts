@@ -72,6 +72,23 @@ describe("Llm", () => {
     expect(() => Llm.text("hello", { chunkSize: 0 })).toThrow()
     expect(() => Llm.text("hello", { chunkSize: 1.5 })).toThrow()
     expect(() =>
+      Llm.toolCall({ index: -1, id: "call_3", name: "read", input: {} }),
+    ).toThrow()
+    expect(() =>
+      Llm.toolCall({ index: 1.5, id: "call_3", name: "read", input: {} }),
+    ).toThrow()
+    expect(() =>
+      Llm.toolCall({ index: Number.NaN, id: "call_3", name: "read", input: {} }),
+    ).toThrow()
+    expect(() =>
+      Llm.toolCall({
+        index: Number.POSITIVE_INFINITY,
+        id: "call_3",
+        name: "read",
+        input: {},
+      }),
+    ).toThrow()
+    expect(() =>
       decode({ type: "finish", reason: "unknown" }),
     ).toThrow()
     expect(() =>

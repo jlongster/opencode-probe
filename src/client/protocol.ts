@@ -1,4 +1,5 @@
 import { Effect, Schema } from "effect"
+import * as Llm from "../llm/index.js"
 import type {
   LlmFinishReason,
   LlmItem,
@@ -226,23 +227,12 @@ export namespace Backend {
       type: Schema.Literal("reasoningDelta"),
       text: Schema.String,
     }),
-    Schema.Struct({
-      type: Schema.Literal("toolCall"),
-      index: Schema.Number,
-      id: Schema.String,
-      name: Schema.String,
-      input: Schema.Json,
-    }),
-    Schema.Struct({ type: Schema.Literal("raw"), chunk: Schema.Json }),
+    Llm.ToolCall,
+    Llm.Raw,
   ])
   export type Item = LlmItem
 
-  export const FinishReason = Schema.Literals([
-    "stop",
-    "tool-calls",
-    "length",
-    "content-filter",
-  ])
+  export const FinishReason = Llm.FinishReason
   export type FinishReason = LlmFinishReason
 
   export const ChunkParams = Schema.Struct({

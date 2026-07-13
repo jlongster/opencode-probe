@@ -1,11 +1,15 @@
-import { Schema } from "effect"
+import * as Schema from "effect/Schema"
 
-export const NonNegativeMilliseconds = Schema.Finite.check(
+const NonNegativeMilliseconds = Schema.Finite.check(
   Schema.isGreaterThanOrEqualTo(0),
 )
 
 const PositiveInteger = Schema.Int.check(
   Schema.isGreaterThanOrEqualTo(1),
+)
+
+const NonNegativeInteger = Schema.Int.check(
+  Schema.isGreaterThanOrEqualTo(0),
 )
 
 export const StreamOptions = Schema.Struct({
@@ -36,7 +40,7 @@ export interface Pause extends Schema.Schema.Type<typeof Pause> {}
 
 export const ToolCall = Schema.Struct({
   type: Schema.Literal("toolCall"),
-  index: Schema.Number,
+  index: NonNegativeInteger,
   id: Schema.String,
   name: Schema.String,
   input: Schema.Json,

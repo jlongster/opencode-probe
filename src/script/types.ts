@@ -1,3 +1,5 @@
+import type * as Llm from "../llm/index.js"
+
 export type JsonValue =
   | null
   | boolean
@@ -121,47 +123,22 @@ export interface LlmTextDelta {
   readonly text: string
 }
 
-export interface LlmStreamOptions {
-  /** Milliseconds to wait between chunks. Defaults to 2. */
-  readonly delay?: number
-  /** Target characters per chunk. Defaults to 15 and varies by plus or minus 5. */
-  readonly chunkSize?: number
-}
+export type LlmStreamOptions = Llm.StreamOptions
 
-export interface LlmText {
-  readonly type: "text"
-  readonly text: string
-  readonly options?: LlmStreamOptions
-}
+export type LlmText = Llm.Text
 
 export interface LlmReasoningDelta {
   readonly type: "reasoningDelta"
   readonly text: string
 }
 
-export interface LlmReasoning {
-  readonly type: "reasoning"
-  readonly text: string
-  readonly options?: LlmStreamOptions
-}
+export type LlmReasoning = Llm.Reasoning
 
-export interface LlmPause {
-  readonly type: "pause"
-  readonly milliseconds: number
-}
+export type LlmPause = Llm.Pause
 
-export interface LlmToolCall {
-  readonly type: "toolCall"
-  readonly index: number
-  readonly id: string
-  readonly name: string
-  readonly input: JsonValue
-}
+export type LlmToolCall = Llm.ToolCall
 
-export interface LlmRawChunk {
-  readonly type: "raw"
-  readonly chunk: JsonValue
-}
+export type LlmRawChunk = Llm.Raw
 
 export type LlmItem =
   | LlmTextDelta
@@ -169,28 +146,16 @@ export type LlmItem =
   | LlmToolCall
   | LlmRawChunk
 
-export type LlmFinishReason =
-  | "stop"
-  | "tool-calls"
-  | "length"
-  | "content-filter"
+export type LlmFinishReason = Llm.FinishReason
 
-export interface LlmFinish {
-  readonly type: "finish"
-  readonly reason?: LlmFinishReason
-}
+export type LlmFinish = Llm.Finish
 
-export interface LlmDisconnect {
-  readonly type: "disconnect"
-}
+export type LlmDisconnect = Llm.Disconnect
 
 export type LlmOutput =
-  | LlmText
-  | LlmReasoning
-  | LlmPause
+  | Llm.Output
+  // Legacy scripts may still send protocol-level deltas directly.
   | LlmItem
-  | LlmFinish
-  | LlmDisconnect
 
 export interface LlmRequest {
   readonly id: string
