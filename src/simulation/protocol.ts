@@ -229,11 +229,24 @@ export namespace Backend {
   export const FinishReason = Llm.FinishReason
   export type FinishReason = Schema.Schema.Type<typeof FinishReason>
 
+  export const Attached = Schema.Struct({ attached: Schema.Literal(true) })
+  export interface Attached extends Schema.Schema.Type<typeof Attached> {}
+
+  export const Ok = Schema.Struct({ ok: Schema.Literal(true) })
+  export interface Ok extends Schema.Schema.Type<typeof Ok> {}
+
   export const ChunkParams = Schema.Struct({
     id: Schema.String,
     items: Schema.Array(Item),
   })
   export interface ChunkParams extends Schema.Schema.Type<typeof ChunkParams> {}
+
+  export const FinishPayload = Schema.Struct({
+    id: Schema.String,
+    reason: Schema.optionalKey(FinishReason),
+  })
+  export interface FinishPayload
+    extends Schema.Schema.Type<typeof FinishPayload> {}
 
   export const FinishParams = Schema.Struct({
     id: Schema.String,
