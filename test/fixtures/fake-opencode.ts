@@ -41,7 +41,7 @@ if (process.env.OPENCODE_TEST_HOME && role !== "service") {
     )
 }
 
-const ui = role === "service" ? undefined : Bun.serve({
+const ui = role === "service" || process.argv.includes("no-ui") ? undefined : Bun.serve({
   hostname: "127.0.0.1",
   port: Number(new URL(endpoints.ui).port),
   fetch(request, server) {

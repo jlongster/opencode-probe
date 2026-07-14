@@ -153,17 +153,21 @@ The constructor does not manage ports, process flags, WebSocket listeners, reque
 ```ts
 export const make = Effect.fn("OpenCodeServer.make")(
   function* (options: OpenCodeServer.Options) {
-    const processSpawner = yield* ProcessSpawner.Service
     const connector = yield* SimulationConnector.Service
 
-    const process = yield* processSpawner.server(options)
+    const instance = yield* OpenCodeInstance.make({
+      artifacts: options.project.artifacts,
+      name: `library-${crypto.randomUUID().slice(0, 12)}`,
+      scripted: true,
+      ...options.target,
+    })
+    const process = yield* instance.launchServer
     const backend = yield* connector.backend(
-      process.endpoints.backend,
+      process.endpoint,
     )
     const llm = yield* LlmController.make(backend)
     const clients = yield* OpenCodeClients.make({
-      project: options.project,
-      server: process,
+      instance,
       connector,
     })
 
@@ -184,9 +188,9 @@ The returned server value has domain capabilities. It does not expose the raw ba
 ```ts
 export const make = Effect.fn("OpenCodeClient.make")(
   function* (options: OpenCodeClient.Options) {
-    const process = yield* options.processSpawner.client(options)
+    const process = yield* options.instance.launchClient(options.identity)
     const ui = yield* options.connector.ui(
-      process.endpoints.ui,
+      process.endpoint,
     )
 
     return OpenCodeClient.of({
@@ -287,18 +291,17 @@ Do not translate each mutable field into its own `Ref`, each callback into a `Qu
 
 ## Stable adapters are services; dynamic resources are values
 
-The architecture needs only a few service seams:
+The architecture uses existing Effect services for stable infrastructure and keeps Drive resources as scoped values:
 
 | Service | Real adapters |
 |---|---|
-| `ProcessSpawner` | Effect `ChildProcessSpawner` adapter and deterministic test adapter; legacy CLI launch remains Bun-backed |
+| Effect `ChildProcessSpawner` | Node child-process layer and deterministic test layers |
 | `SimulationConnector` | Canonical WebSocket adapter and in-memory test adapter |
-| `RecordingExporter` | Canvas/ffmpeg adapter and injected test adapter |
-| `InstanceRegistry` | Filesystem registry and deterministic test adapter |
 
 Dynamic resources remain scoped values:
 
 - `OpenCodeProject`
+- `OpenCodeInstance`
 - `OpenCodeServer`
 - `OpenCodeClient`
 - UI and backend protocol clients
@@ -321,6 +324,10 @@ src/
 |   |-- client.ts             # OpenCodeClient.make
 |   |-- ui.ts                 # UI capability
 |   `-- llm-controller.ts     # Live LLM capability
+|-- instance/
+|   |-- process.ts            # Scoped Effect child-process primitives
+|   |-- runtime.ts            # OpenCodeInstance lifecycle
+|   `-- instance.ts           # Artifact and project preparation
 |-- simulation/
 |   |-- protocol.ts           # Canonical OpenCode schemas
 |   |-- rpc.ts                # Drive-local RpcGroups
@@ -328,7 +335,6 @@ src/
 |   `-- opencode-protocol.ts  # Existing JSON-RPC adapter
 |-- client/                   # Existing public compatibility facade
 |-- cli/
-|-- instance/
 |-- recording/
 `-- script/
 ```
@@ -484,7 +490,7 @@ The exact public spelling of that bracket is intentionally left out of the settl
 4. Define Drive-local UI and backend `RpcGroup`s over the canonical schemas.
 5. Build the scoped WebSocket connection and custom `OpenCodeRpcProtocol`.
 6. Replace Drive's manual clients with generated `RpcClient`s.
-7. Add scoped process adapters and `OpenCodeProject.make`.
+7. Add scoped Effect process ownership and `OpenCodeProject.make`.
 8. Add `OpenCodeServer.make` with shared backend and LLM control.
 9. Add `OpenCodeClient.make` and the primary UI path.
 10. Compose `OpenCodeDriver.make` and its typed settlement bracket.

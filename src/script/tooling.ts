@@ -1,6 +1,9 @@
 import { lstat, mkdir, readlink, rm, rmdir, stat, symlink } from "node:fs/promises"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
+import { NodeServices } from "@effect/platform-node"
+import * as Effect from "effect/Effect"
+import * as Process from "../instance/process.js"
 
 const packageRoot = resolve(fileURLToPath(new URL("../..", import.meta.url)))
 
@@ -22,16 +25,14 @@ export async function prepareScriptTooling(artifacts: string, script: string) {
     await Bun.write(manifest, contents)
   }
   if (!(await linkLocalTooling(artifacts))) {
-    const install = Bun.spawn([process.execPath, "install"], {
-      cwd: artifacts,
-      stdin: "ignore",
-      stdout: "ignore",
-      stderr: "pipe",
-    })
-    const status = await install.exited
-    if (status !== 0)
+    const install = await runProcess(
+      [process.execPath, "install"],
+      artifacts,
+      { stdout: "ignore" },
+    )
+    if (install.status !== 0)
       throw new Error(
-        `bun install failed in ${artifacts}: ${(await new Response(install.stderr).text()).trim()}`,
+        `bun install failed in ${artifacts}: ${install.stderr.trim()}`,
       )
   }
 
@@ -117,18 +118,28 @@ function isPackageMetadata(
 export async function checkScript(artifacts: string, script: string) {
   const tooling = await prepareScriptTooling(artifacts, script)
   try {
-    const child = Bun.spawn([tooling.tsgo, "-p", tooling.tsconfig], {
-      cwd: artifacts,
-      stdin: "ignore",
-      stdout: "inherit",
-      stderr: "inherit",
-    })
-    const status = await child.exited
-    if (status !== 0) throw new Error(`script type check failed with status ${status}`)
+    const output = await runProcess(
+      [tooling.tsgo, "-p", tooling.tsconfig],
+      artifacts,
+      { stdout: "inherit", stderr: "inherit" },
+    )
+    if (output.status !== 0)
+      throw new Error(`script type check failed with status ${output.status}`)
   } finally {
     await tooling.links.remove()
   }
 }
+
+const runProcess = (
+  command: ReadonlyArray<string>,
+  cwd: string,
+  options: Omit<Process.RunOptions, "cwd"> = {},
+) =>
+  Effect.runPromise(
+    Process.run(command, { ...options, cwd }).pipe(
+      Effect.provide(NodeServices.layer),
+    ),
+  )
 
 async function linkScriptDependencies(script: string, artifacts: string) {
   const modules = join(dirname(script), "node_modules")

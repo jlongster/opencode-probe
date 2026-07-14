@@ -1,6 +1,9 @@
 import { lstat, readdir, rm } from "node:fs/promises"
 import { devNull } from "node:os"
 import { join } from "node:path"
+import { NodeServices } from "@effect/platform-node"
+import * as Effect from "effect/Effect"
+import * as Process from "../instance/process.js"
 import { writeScriptFiles } from "./filesystem.js"
 import type { ScriptProject } from "./types.js"
 
@@ -42,24 +45,20 @@ export async function hasGitMetadata(root: string) {
 }
 
 async function git(cwd: string, args: ReadonlyArray<string>) {
-  const process = Bun.spawn(["git", ...args], {
-    cwd,
-    stdout: "pipe",
-    stderr: "pipe",
-    env: {
-      ...stripGitEnvironment(Bun.env),
-      GIT_CONFIG_GLOBAL: devNull,
-      GIT_CONFIG_NOSYSTEM: "1",
-      GIT_AUTHOR_DATE: "2000-01-01T00:00:00Z",
-      GIT_COMMITTER_DATE: "2000-01-01T00:00:00Z",
-    },
-  })
-  const [status, stderr] = await Promise.all([
-    process.exited,
-    new Response(process.stderr).text(),
-  ])
-  if (status === 0) return
-  throw new Error(`git ${args[0]} failed: ${stderr.trim()}`)
+  const output = await Effect.runPromise(
+    Process.run(["git", ...args], {
+      cwd,
+      env: {
+        ...stripGitEnvironment(Bun.env),
+        GIT_CONFIG_GLOBAL: devNull,
+        GIT_CONFIG_NOSYSTEM: "1",
+        GIT_AUTHOR_DATE: "2000-01-01T00:00:00Z",
+        GIT_COMMITTER_DATE: "2000-01-01T00:00:00Z",
+      },
+    }).pipe(Effect.provide(NodeServices.layer)),
+  )
+  if (output.status === 0) return
+  throw new Error(`git ${args[0]} failed: ${output.stderr.trim()}`)
 }
 
 export function stripGitEnvironment(env: Readonly<Record<string, string | undefined>>) {

@@ -44,6 +44,13 @@ export function logError(message: string) {
   const line = `error: ${message}`
   console.error(process.stderr.isTTY ? `\x1b[31m${line}\x1b[0m` : line)
   append("ERROR", message)
+  appendOwner(message)
+}
+
+function appendOwner(message: string) {
+  const ownerLog = process.env.OPENCODE_DRIVE_OWNER_LOG
+  if (!ownerLog) return
+  appendBestEffort(ownerLog, `${message}\n`)
 }
 
 export function recordLog(level: "INFO" | "ERROR", message: string) {
@@ -52,9 +59,16 @@ export function recordLog(level: "INFO" | "ERROR", message: string) {
 
 function append(level: "INFO" | "ERROR", message: string) {
   if (!currentLogFile) return
+  appendBestEffort(
+    currentLogFile,
+    `[${new Date().toISOString()}] ${level} ${message}\n`,
+  )
+}
+
+function appendBestEffort(path: string, contents: string) {
   try {
-    mkdirSync(dirname(currentLogFile), { recursive: true })
-    appendFileSync(currentLogFile, `[${new Date().toISOString()}] ${level} ${message}\n`)
+    mkdirSync(dirname(path), { recursive: true })
+    appendFileSync(path, contents)
   } catch {
     // Logging must not change CLI behavior.
   }

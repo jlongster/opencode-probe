@@ -1,4 +1,10 @@
-import { initializeInstance, launchInstance } from "../instance/instance.js"
+import { NodeServices } from "@effect/platform-node"
+import * as Effect from "effect/Effect"
+import * as Exit from "effect/Exit"
+import * as Scope from "effect/Scope"
+import { initializeInstance } from "../instance/instance.js"
+import * as DriveProcess from "../instance/process.js"
+import * as OpenCodeInstance from "../instance/runtime.js"
 import { mkdir, rm } from "node:fs/promises"
 import { join } from "node:path"
 import { connectSimulation } from "../client/index.js"
@@ -56,19 +62,26 @@ export async function start(options: StartOptions) {
   }
   const responses = createResponseSettings()
   logSuccess("launching instance")
-  const instance = await launchInstance({
-    artifacts: initialized.artifacts,
-    name: options.name,
-    command: options.command,
-    dev: options.dev,
-    scripted: options.script !== undefined,
-    visible: options.visible,
-    record: options.record,
-    viewport: script?.viewport,
-    project: script?.project,
-    setup: script?.setup,
-    log: logSuccess,
-  }).catch(async (error) => {
+  const instanceScope = await Effect.runPromise(Scope.make())
+  const instance = await Effect.runPromise(
+    OpenCodeInstance.make({
+      artifacts: initialized.artifacts,
+      name: options.name,
+      command: options.command,
+      dev: options.dev,
+      scripted: options.script !== undefined,
+      visible: options.visible,
+      record: options.record,
+      viewport: script?.viewport,
+      project: script?.project,
+      setup: script?.setup,
+      log: logSuccess,
+    }).pipe(
+      Scope.provide(instanceScope),
+      Effect.provide(NodeServices.layer),
+    ),
+  ).catch(async (error) => {
+    await Effect.runPromise(Scope.close(instanceScope, Exit.void))
     await scriptTooling?.links.remove()
     throw error
   })
@@ -84,7 +97,8 @@ export async function start(options: StartOptions) {
     endpoints: instance.endpoints,
     control: controlPath(options.name),
   }).catch(async (error) => {
-    await instance.stop()
+    await runEffect(instance.stop)
+    await Effect.runPromise(Scope.close(instanceScope, Exit.void))
     await scriptTooling?.links.remove()
     throw error
   })
@@ -114,7 +128,7 @@ export async function start(options: StartOptions) {
       .catch((error) =>
         logError(`failed to export recording: ${error}`),
       )
-      .finally(() => instance.stop())
+      .finally(() => runEffect(instance.stop))
   }
   process.once("SIGINT", interrupt)
   process.once("SIGTERM", interrupt)
@@ -128,7 +142,7 @@ export async function start(options: StartOptions) {
     } finally {
       stopping = true
       current?.abort.abort(new Error("opencode-drive stopped"))
-      await instance.stop()
+      await runEffect(instance.stop)
     }
   }
   const completeScript = async () => {
@@ -152,7 +166,7 @@ export async function start(options: StartOptions) {
             if (error !== restartReason) throw error
           })
           driveReady = false
-          await instance.restart()
+          await runEffect(instance.restart)
           recording = undefined
           current = run(
             options,
@@ -202,9 +216,9 @@ export async function start(options: StartOptions) {
           result = options.script
             ? await Promise.race([
                 active.promise.then(() => ({ script: true as const })),
-                instance.wait().then((status) => ({ script: false as const, status })),
+                runEffect(instance.wait).then((status) => ({ script: false as const, status })),
               ])
-            : { script: false as const, status: await instance.wait() }
+            : { script: false as const, status: await runEffect(instance.wait) }
         } catch (error) {
           if (stopping) return
           if (restarting || active !== current) {
@@ -220,7 +234,7 @@ export async function start(options: StartOptions) {
         if (result.script) {
           await completeScript()
         }
-        const status = result.script ? await instance.wait() : result.status
+        const status = result.script ? await runEffect(instance.wait) : result.status
         if (status !== 0 && !stopping) process.exitCode = status
         return
       }
@@ -266,7 +280,7 @@ export async function start(options: StartOptions) {
       cleanupFailure ??= error
       logError(`failed to close control socket: ${error}`)
     })
-    await instance.stop().catch((error) => {
+    await runEffect(instance.stop).catch((error) => {
       cleanupFailure ??= error
       logError(`failed to stop OpenCode: ${error}`)
     })
@@ -291,6 +305,7 @@ export async function start(options: StartOptions) {
     if (options.script && failure !== undefined)
       setTimeout(() => process.exit(1), 0)
     if (failure === undefined && cleanupFailure !== undefined) process.exitCode = 1
+    await Effect.runPromise(Scope.close(instanceScope, Exit.void))
   }
 }
 
@@ -311,13 +326,14 @@ function shouldCleanArtifacts(
 }
 
 async function finishRecording(
-  instance: Awaited<ReturnType<typeof launchInstance>>,
+  instance: OpenCodeInstance.Instance,
   onProgress?: (percent: number) => void,
 ) {
-  const expected = instance.recording
+  const expected = await runEffect(instance.recording)
   if (!expected) throw new Error("recording was not enabled for this instance")
   let timeline: string
-  if (instance.child.exitCode !== null) {
+  const process = await runEffect(instance.primary)
+  if (!(await runEffect(process.isRunning))) {
     timeline = expected.timeline
   } else {
     const ui = await connectSimulation({
@@ -340,57 +356,62 @@ async function startDetached(options: StartOptions, artifacts: string) {
   await mkdir(registryDirectory(), { recursive: true })
   await rm(ownerLog, { force: true })
   logSuccess(`launching detached owner for ${options.name}`)
-  const child = Bun.spawn(
-    [
-      process.execPath,
-      process.argv[1]!,
-      "start",
-      "--daemon",
-      "--name",
-      options.name,
-      ...(options.script ? ["--script", options.script] : []),
-      ...(options.dev ? ["--dev", options.dev] : []),
-      ...(options.record ? ["--record"] : []),
-      ...(options.command.length ? ["--", ...options.command] : []),
-    ],
-    {
-      cwd: process.cwd(),
-      env: { ...process.env, OPENCODE_DRIVE_LOG: configureLogFile(artifacts) },
-      stdin: "ignore",
-      stdout: "ignore",
-      stderr: Bun.file(ownerLog),
-    },
-  )
-  child.unref()
-  logSuccess(`waiting for ${options.name} to become ready`)
-  const deadline = Date.now() + 60_000
-  while (Date.now() < deadline) {
-    const manifest = await resolveInstance(options.name).catch(() => undefined)
-    if (manifest?.pid === child.pid) {
-      logSuccess(`ready ${options.name}`)
-      await logReadyPaths(manifest.artifacts)
-      return
+  const ownerScope = await Effect.runPromise(Scope.make())
+  try {
+    const child = await Effect.runPromise(
+      DriveProcess.spawn([
+        process.execPath,
+        process.argv[1]!,
+        "start",
+        "--daemon",
+        "--name",
+        options.name,
+        ...(options.script ? ["--script", options.script] : []),
+        ...(options.dev ? ["--dev", options.dev] : []),
+        ...(options.record ? ["--record"] : []),
+        ...(options.command.length ? ["--", ...options.command] : []),
+      ], {
+        cwd: process.cwd(),
+        env: {
+          ...process.env,
+          OPENCODE_DRIVE_LOG: configureLogFile(artifacts),
+          OPENCODE_DRIVE_OWNER_LOG: ownerLog,
+        },
+        stdin: "ignore",
+        stdout: "ignore",
+        stderr: "ignore",
+        detached: true,
+      }).pipe(
+        Scope.provide(ownerScope),
+        Effect.provide(NodeServices.layer),
+      ),
+    )
+    logSuccess(`waiting for ${options.name} to become ready`)
+    const deadline = Date.now() + 60_000
+    while (Date.now() < deadline) {
+      const manifest = await resolveInstance(options.name).catch(() => undefined)
+      if (manifest?.pid === child.pid) {
+        logSuccess(`ready ${options.name}`)
+        await logReadyPaths(manifest.artifacts)
+        await runEffect(child.detach)
+        return
+      }
+      if (!(await runEffect(child.isRunning))) {
+        const status = await runEffect(child.exitCode)
+        throw new Error(`detached instance exited with status ${status}; see ${ownerLog}`)
+      }
+      await Bun.sleep(50)
     }
-    if (child.exitCode !== null)
-      throw new Error(`detached instance exited with status ${child.exitCode}; see ${ownerLog}`)
-    await Bun.sleep(50)
+    await runEffect(child.terminate)
+    throw new Error(`timed out starting drive instance "${options.name}"; see ${ownerLog}`)
+  } finally {
+    await Effect.runPromise(Scope.close(ownerScope, Exit.void))
   }
-  await terminateOwner(child)
-  throw new Error(`timed out starting drive instance "${options.name}"; see ${ownerLog}`)
-}
-
-async function terminateOwner(child: Bun.Subprocess) {
-  if (child.exitCode !== null) return
-  child.kill("SIGTERM")
-  const deadline = Date.now() + 1_000
-  while (child.exitCode === null && Date.now() < deadline) await Bun.sleep(25)
-  if (child.exitCode === null) child.kill("SIGKILL")
-  await child.exited
 }
 
 function run(
   options: StartOptions,
-  instance: Awaited<ReturnType<typeof launchInstance>>,
+  instance: OpenCodeInstance.Instance,
   responses: ReturnType<typeof createResponseSettings>,
   driveScript: ScriptDefinition | undefined,
   onScreenshot: (path: string) => void,
@@ -407,7 +428,7 @@ function run(
   const promise = (async () => {
     if (!driveScript) {
       logSuccess("waiting for OpenCode")
-      await instance.waitForDrive("both")
+      await runEffect(instance.waitForDrive("both"))
       logSuccess("OpenCode ready")
     }
     if (driveScript) {
@@ -415,9 +436,22 @@ function run(
       await runScript(
         driveScript,
         instance.artifacts,
-        () => instance.launchServer(),
-        () => instance.killServer(),
-        (name, clientOptions) => instance.launchClient(name, clientOptions),
+        async () => {
+          const launched = await runEffect(instance.launchServer)
+          return { endpoint: launched.endpoint }
+        },
+        () => runEffect(instance.killServer),
+        async (name, clientOptions) => {
+          const launched = await runEffect(
+            instance.launchClient(name, clientOptions),
+          )
+          return {
+            endpoint: launched.endpoint,
+            exited: runEffect(launched.process.exitCode),
+            close: () => runEffect(launched.close),
+            recording: launched.recording,
+          }
+        },
         abort.signal,
         onScreenshot,
         onRecording,
@@ -427,14 +461,14 @@ function run(
       logSuccess("script completed")
       return
     }
-    const child = instance.child
+    const child = await runEffect(instance.primary)
     const mock = await connectMockBackend(instance.endpoints.backend, responses)
     ready()
     abort.signal.addEventListener("abort", () => mock.close(), {
       once: true,
     })
     const status = await Promise.race([
-      child.exited,
+      runEffect(child.exitCode),
       new Promise<number>((resolve) =>
         abort.signal.addEventListener("abort", () => resolve(0), {
           once: true,
@@ -454,6 +488,9 @@ function run(
     promise,
   }
 }
+
+const runEffect = <A, E>(effect: Effect.Effect<A, E>) =>
+  Effect.runPromise(effect)
 
 function report(status?: string) {
   if (status) logSuccess(status)

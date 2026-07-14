@@ -1,8 +1,10 @@
-import { spawn } from "node:child_process"
 import { createHash } from "node:crypto"
 import { copyFile, link, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { dirname, extname, join } from "node:path"
+import { NodeServices } from "@effect/platform-node"
+import * as Effect from "effect/Effect"
+import * as Process from "../instance/process.js"
 import { replayRecording, type ReplayOptions } from "./replay.js"
 import { CellHeight, CellWidth, renderFrame } from "./render.js"
 
@@ -20,28 +22,29 @@ export interface ExportRecordingResult {
 }
 
 function run(command: string, args: string[], signal?: AbortSignal) {
-  return new Promise<void>((resolve, reject) => {
-    const child = spawn(command, args, { stdio: ["ignore", "ignore", "pipe"] })
-    let stderr = ""
-    const abort = () => child.kill("SIGKILL")
-    if (signal?.aborted) abort()
-    else signal?.addEventListener("abort", abort, { once: true })
-    child.stderr.setEncoding("utf8")
-    child.stderr.on("data", (chunk: string) => {
-      stderr = `${stderr}${chunk}`.slice(-16_384)
-    })
-    child.on("error", (error) => {
-      signal?.removeEventListener("abort", abort)
-      reject(error)
-    })
-    child.on("close", (code) => {
-      signal?.removeEventListener("abort", abort)
+  return Effect.runPromise(
+    Process.run([command, ...args], {
+      stdout: "ignore",
+      stderrLimit: 16_384,
+    }).pipe(
+      Effect.provide(NodeServices.layer),
+    ),
+    { signal },
+  ).then(
+    (output) => {
       if (signal?.aborted)
-        reject(signal.reason ?? new Error("recording export aborted"))
-      else if (code === 0) resolve()
-      else reject(new Error(`ffmpeg exited with code ${code}: ${stderr.trim()}`))
-    })
-  })
+        throw signal.reason ?? new Error("recording export aborted")
+      if (output.status !== 0)
+        throw new Error(
+          `ffmpeg exited with code ${output.status}: ${output.stderr.trim()}`,
+        )
+    },
+    (cause) => {
+      throw signal?.aborted
+        ? signal.reason ?? new Error("recording export aborted")
+        : cause
+    },
+  )
 }
 
 async function linkOrCopy(source: string, destination: string) {

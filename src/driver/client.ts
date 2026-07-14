@@ -4,13 +4,16 @@ import * as Exit from "effect/Exit"
 import * as Ref from "effect/Ref"
 import * as Semaphore from "effect/Semaphore"
 import * as Scope from "effect/Scope"
+import type * as OpenCodeInstance from "../instance/runtime.js"
 import type * as SimulationConnector from "../simulation/connector.js"
 import { finalizeRecording } from "../recording/finalize.js"
 import { error, type OpenCodeDriverError } from "./error.js"
-import type * as ProcessSpawner from "./process-spawner.js"
 import * as OpenCodeUi from "./ui.js"
 
-export interface Options extends ProcessSpawner.ClientOptions {}
+export interface Options {
+  readonly recording?: boolean
+  readonly viewport?: import("../script/types.js").UiViewport
+}
 
 export interface Client {
   readonly ui: OpenCodeUi.Ui
@@ -40,13 +43,33 @@ interface ManagedClient extends Client {
 }
 
 export const make = Effect.fn("OpenCodeClient.make")(function* (
-  process: ProcessSpawner.ServerProcess,
+  instance: OpenCodeInstance.Instance,
+  visible: boolean,
   identity: string,
   options: Options,
-  spawner: ProcessSpawner.Interface,
   connector: SimulationConnector.Interface,
 ) {
-  const launched = yield* spawner.client(process, identity, options)
+  if (visible && options.recording)
+    return yield* Effect.fail(
+      error(
+        "client.launch",
+        "recording requires a headless OpenCode client",
+      ),
+    )
+  const launched = yield* Effect.acquireRelease(
+    instance.launchClient(identity, {
+      record: options.recording,
+      viewport: options.viewport,
+    }).pipe(
+      Effect.mapError((cause) => error("client.launch", cause)),
+    ),
+    (client) =>
+      client.close.pipe(
+        Effect.catchCause((cause) =>
+          Effect.logError("OpenCode client cleanup failed", cause),
+        ),
+      ),
+  )
   const connection = yield* connector.ui(launched.endpoint)
   const ui = OpenCodeUi.make(connection)
   yield* ui.waitFor((state) => state.focused.editor, {
@@ -126,8 +149,8 @@ export interface Control extends Clients {
 }
 
 export const makeClients = Effect.fn("OpenCodeClients.make")(function* (
-  process: ProcessSpawner.ServerProcess,
-  spawner: ProcessSpawner.Interface,
+  instance: OpenCodeInstance.Instance,
+  visible: boolean,
   connector: SimulationConnector.Interface,
 ) {
   const parentScope = yield* Scope.Scope
@@ -163,10 +186,10 @@ export const makeClients = Effect.fn("OpenCodeClients.make")(function* (
         )}`
         const scope = yield* Scope.fork(clientsScope)
         const client = yield* make(
-          process,
+          instance,
+          visible,
           identity,
           options,
-          spawner,
           connector,
         ).pipe(
           Scope.provide(scope),

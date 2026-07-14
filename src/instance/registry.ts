@@ -72,7 +72,7 @@ export async function initializeManifest(
         return
       }
     }
-    if (existing && alive(existing.pid))
+    if (existing && isProcessAlive(existing.pid))
       throw new Error(`drive instance "${name}" is already running`)
     initialized = {
       version: 1,
@@ -101,7 +101,7 @@ export async function register(manifest: InstanceManifest) {
   }
   await withLock(manifest.name, false, async () => {
     const existing = await read(manifestPath(manifest.name))
-    if (existing && existing.status !== "initialized" && alive(existing.pid))
+    if (existing && existing.status !== "initialized" && isProcessAlive(existing.pid))
       throw new Error(`drive instance "${manifest.name}" is already running`)
     await Promise.all([
       rm(manifestPath(manifest.name), { force: true }),
@@ -170,14 +170,14 @@ export async function listManifests() {
       .filter((file) => file.endsWith(".json"))
       .map(async (file) => {
         const name = basename(file, ".json")
-        if (!validName(name)) {
+        if (!isValidName(name)) {
           await rm(join(registryDirectory(), file), { force: true })
           return undefined
         }
         const manifest = await read(join(registryDirectory(), file))
         if (manifest?.name === name) {
           if (manifest.status === "initialized" && keepInitialized(manifest)) return manifest
-          if (manifest.status !== "initialized" && alive(manifest.pid)) return manifest
+          if (manifest.status !== "initialized" && isProcessAlive(manifest.pid)) return manifest
         }
         await prune(name, manifest?.status === "initialized" ? undefined : manifest?.pid)
         return undefined
@@ -190,7 +190,7 @@ export async function listManifests() {
       .filter((file) => file.endsWith(".sock"))
       .flatMap((file) => {
         const name = basename(file, ".sock")
-        if (!validName(name)) return [rm(join(registryDirectory(), file), { force: true })]
+        if (!isValidName(name)) return [rm(join(registryDirectory(), file), { force: true })]
         if (!names.has(name)) return [prune(name)]
         return []
       }),
@@ -220,7 +220,7 @@ async function prune(name: string, pid?: number) {
       ])
       return
     }
-    if (manifest && (manifest.pid !== pid || alive(manifest.pid))) return
+    if (manifest && (manifest.pid !== pid || isProcessAlive(manifest.pid))) return
     await Promise.all([
       rm(manifestPath(name), { force: true }),
       rm(controlPath(name), { force: true }),
@@ -230,7 +230,7 @@ async function prune(name: string, pid?: number) {
 
 function keepInitialized(manifest: InitializedManifest) {
   if (!manifest.temporary) return !legacyVisibleInitialized(manifest.name)
-  return manifest.pid !== undefined && alive(manifest.pid)
+  return manifest.pid !== undefined && isProcessAlive(manifest.pid)
 }
 
 function legacyVisibleInitialized(name: string) {
@@ -292,7 +292,7 @@ async function staleLock(file: string) {
       .catch(() => ""),
     10,
   )
-  return Number.isInteger(pid) && !alive(pid)
+  return Number.isInteger(pid) && !isProcessAlive(pid)
 }
 
 function isManifest(value: unknown): value is Manifest {
@@ -310,18 +310,18 @@ function isManifest(value: unknown): value is Manifest {
 }
 
 export function validateName(name: string) {
-  if (!validName(name))
+  if (!isValidName(name))
     throw new Error(
       "instance names must contain 1-64 letters, numbers, dots, underscores, or dashes",
     )
   return name
 }
 
-function validName(name: string) {
+export function isValidName(name: string) {
   return /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/.test(name)
 }
 
-function alive(pid: number) {
+export function isProcessAlive(pid: number) {
   try {
     process.kill(pid, 0)
     return true

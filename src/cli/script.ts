@@ -43,17 +43,15 @@ export async function loadScript(file: string): Promise<ScriptDefinition> {
 export async function runScript(
   script: ScriptDefinition,
   artifacts: string,
-  launchServer: () => Promise<{
-    readonly endpoints: { readonly backend: string }
-  }>,
+  launchServer: () => Promise<{ readonly endpoint: string }>,
   killServer: () => Promise<void>,
   launchClient: (
     name: string,
     options?: { readonly record?: boolean; readonly viewport?: UiViewport },
   ) => Promise<{
-    readonly endpoints: { readonly ui: string }
-    readonly child: { readonly exited: Promise<number> }
-    readonly kill: () => Promise<void>
+    readonly endpoint: string
+    readonly exited: Promise<number>
+    readonly close: () => Promise<void>
     readonly recording?: { readonly timeline: string; readonly video: string }
   }>,
   signal: AbortSignal,
@@ -90,24 +88,32 @@ export async function runScript(
         viewport: options?.viewport ?? script.viewport,
       })
       let intentional = false
-      void launched.child.exited.then((status) => {
+      void launched.exited.then((status) => {
         if (!closing && !intentional) clientExit.resolve({ name, status })
       })
-      const client = await connectSimulation({
-        url: launched.endpoints.ui,
-        onScreenshot,
-      })
-      connected.set(name, client)
+      let client: SimulationClient | undefined
       try {
+        client = await connectSimulation({
+          url: launched.endpoint,
+          onScreenshot,
+        })
+        connected.set(name, client)
         await waitForEditor(client, scriptSignal).catch((error) => {
           abortTimeout(error)
           throw error
         })
       } catch (error) {
+        intentional = true
         connected.delete(name)
-        client.close()
+        client?.close()
+        await launched.close().catch((cleanup) => {
+          throw new Error(`client cleanup failed: ${cleanup}`, {
+            cause: error,
+          })
+        })
         throw error
       }
+      const connectedClient = client
       onReady?.()
       let finalizing: Promise<string | undefined> | undefined
       const finalize = () => {
@@ -116,7 +122,7 @@ export async function runScript(
           let output: string | undefined
           try {
             if (launched.recording && !fatalTimeout) {
-              const timeline = await client.finishRecording().catch((error) => {
+              const timeline = await connectedClient.finishRecording().catch((error) => {
                 abortTimeout(error)
                 throw error
               })
@@ -127,14 +133,14 @@ export async function runScript(
           } finally {
             finalizers.delete(name)
             connected.delete(name)
-            client.close()
-            await launched.kill()
+            connectedClient.close()
+            await launched.close()
           }
         })()
         return finalizing
       }
       finalizers.set(name, finalize)
-      return new ScriptUiClient(client, scriptSignal, finalize, abortTimeout)
+      return new ScriptUiClient(connectedClient, scriptSignal, finalize, abortTimeout)
     },
   }
   const llm = new ScriptLlmClient(abortTimeout)
@@ -148,16 +154,22 @@ export async function runScript(
       serverStarting = true
       try {
         const launched = await launchServer()
-        const client = await connectBackendSimulation({
-          url: launched.endpoints.backend,
-        })
+        let client: BackendSimulationClient | undefined
         try {
+          client = await connectBackendSimulation({
+            url: launched.endpoint,
+          })
           await llm.attach(client).catch((error) => {
             abortTimeout(error)
             throw error
           })
         } catch (error) {
-          client.close()
+          client?.close()
+          await killServer().catch((cleanup) => {
+            throw new Error(`server cleanup failed: ${cleanup}`, {
+              cause: error,
+            })
+          })
           throw error
         }
         backend = client

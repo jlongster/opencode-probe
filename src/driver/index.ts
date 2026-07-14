@@ -14,7 +14,6 @@ import type {
   LlmControllerError,
   LlmSettlementError,
 } from "./llm-controller.js"
-import * as ProcessSpawner from "./process-spawner.js"
 import * as OpenCodeProject from "./project.js"
 import * as OpenCodeServer from "./server.js"
 import type * as OpenCodeUi from "./ui.js"
@@ -24,7 +23,7 @@ export interface Options {
   readonly config?: JsonObject
   readonly setup?: ScriptSetup
   readonly client?: OpenCodeClient.Options
-  readonly opencode?: ProcessSpawner.Target
+  readonly opencode?: OpenCodeServer.Target
   readonly keepArtifacts?: boolean
 }
 
@@ -119,7 +118,6 @@ const makeWithServices = Effect.fn("OpenCodeDriver.makeWithServices")(
 
 const makeManaged = (options: Options = {}) =>
   makeWithServices(options).pipe(
-    Effect.provide(ProcessSpawner.layer),
     Effect.provide(SimulationConnector.layer),
     Effect.provide(NodeServices.layer),
   )
