@@ -19,6 +19,7 @@ export async function prepareScriptTooling(
     throw new Error("opencode-drive package metadata is missing script dependencies")
   const dependencies = {
     "opencode-drive": `file:${packageRoot}`,
+    effect: packageJson.dependencies.effect,
     "@typescript/native-preview":
       packageJson.devDependencies["@typescript/native-preview"],
     "@types/bun": packageJson.devDependencies["@types/bun"],
@@ -109,11 +110,24 @@ async function linkLocalTooling(artifacts: string) {
 
 function isPackageMetadata(
   value: unknown,
-): value is { readonly devDependencies: Record<string, string> } {
-  if (typeof value !== "object" || value === null || !("devDependencies" in value))
+): value is {
+  readonly dependencies: { readonly effect: string }
+  readonly devDependencies: Record<string, string>
+} {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !("dependencies" in value) ||
+    !("devDependencies" in value)
+  )
     return false
+  const runtime = value.dependencies
   const dependencies = value.devDependencies
   return (
+    typeof runtime === "object" &&
+    runtime !== null &&
+    "effect" in runtime &&
+    typeof runtime.effect === "string" &&
     typeof dependencies === "object" &&
     dependencies !== null &&
     "@typescript/native-preview" in dependencies &&
