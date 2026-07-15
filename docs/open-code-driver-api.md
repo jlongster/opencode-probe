@@ -6,6 +6,30 @@ This document records interface shapes that have been accepted during design. It
 
 Internal resource ownership and desugaring are documented in [OpenCode Driver Architecture](./open-code-driver-architecture.md).
 
+## Run Effect programs from the CLI
+
+`opencode-drive run <module>` is the primary CLI entrypoint. The module must
+default-export an `Effect<_, _, never>`. Before importing the module, Drive
+generates and type-checks a contract entrypoint that assigns its default export
+to that fully provided Effect type. Drive then imports the module, verifies the
+value with `Effect.isEffect`, and yields it directly from the command handler.
+There is no nested runtime or detached owner.
+
+```ts
+import { OpenCodeDriver } from "opencode-drive"
+
+export default OpenCodeDriver.use({}, ({ ui }) => ui.screenshot("home"))
+```
+
+```sh
+opencode-drive run ./drive.ts
+```
+
+The command accepts no flags and no arguments after `--`. Use the driver API in
+the module for simulation control. `opencode-drive check` remains the contract
+checker for Promise `defineScript` modules, and `start --script` remains their
+execution path.
+
 ## `use` settles one scoped driver
 
 `OpenCodeDriver.use(options, run)` is the safe top-level interface. It acquires the same driver returned by `make`, runs the program, validates queued LLM work, finishes recordings, closes clients, exports videos, and then releases the server and project scope.

@@ -21,6 +21,123 @@ bun install
 npx skills add anomalyco/opencode-drive --agent opencode --skill opencode-drive
 ```
 
+## Effect programs
+
+The primary way to automate OpenCode is a default-exported, fully provided
+Effect. Drive type-checks the module contract before importing it, validates the
+export at runtime, and runs it in the CLI's Effect runtime:
+
+```ts
+// drive.ts
+import { OpenCodeDriver } from "opencode-drive"
+
+export default OpenCodeDriver.use({}, ({ ui }) =>
+  ui.screenshot("home"),
+)
+```
+
+```sh
+opencode-drive run ./drive.ts
+```
+
+`run` accepts exactly one module path. It rejects `--command.*` flags, other
+command flags, and application arguments after `--`. Backend and UI behavior
+belongs in the Effect program.
+
+`OpenCodeDriver.use` is the safe default. It owns the scope, observes backend
+failure, settles queued LLM work, closes every client, and exports recordings
+whether the program succeeds or fails:
+
+```ts
+import { Effect } from "effect"
+import { Llm, OpenCodeDriver } from "opencode-drive"
+
+export default OpenCodeDriver.use(
+  {
+    project: {
+      git: true,
+      files: { "src/value.ts": "export const value = 1\n" },
+    },
+  },
+  ({ ui, llm }) =>
+    Effect.gen(function* () {
+      yield* llm.queue(Llm.text("The value is 1."))
+      yield* ui.submit("Read src/value.ts")
+      yield* ui.waitFor("The value is 1.")
+    }),
+)
+```
+
+Additional clients share the same server and LLM controller:
+
+```ts
+import { Effect } from "effect"
+import { OpenCodeDriver } from "opencode-drive"
+
+export default OpenCodeDriver.use({}, (oc) =>
+  Effect.gen(function* () {
+    const secondary = yield* oc.clients.make({
+      viewport: { cols: 120, rows: 40 },
+    })
+    yield* oc.ui.screenshot("primary")
+    yield* secondary.ui.screenshot("secondary")
+  }),
+)
+```
+
+Enable recording per client. Settlement finishes each timeline and exports its
+video automatically:
+
+```ts
+import { Effect } from "effect"
+import { OpenCodeDriver } from "opencode-drive"
+
+export default OpenCodeDriver.use(
+  { client: { recording: true } },
+  (oc) =>
+    Effect.gen(function* () {
+      yield* oc.ui.screenshot("recorded-home")
+      yield* Effect.log(`recording will be exported to ${oc.recording?.path}`)
+    }),
+)
+```
+
+Settlement errors are program failures. For example, output after a terminal
+LLM event fails the run while `use` still closes clients and attempts recording
+export:
+
+```ts
+import { Effect } from "effect"
+import { Llm, OpenCodeDriver } from "opencode-drive"
+
+export default OpenCodeDriver.use({}, ({ ui, llm }) =>
+  Effect.gen(function* () {
+    yield* llm.queue(Llm.finish(), Llm.text("too late"))
+    yield* ui.submit("trigger a response")
+  }),
+)
+```
+
+Use `OpenCodeDriver.make` only when the program needs explicit terminal
+settlement. It requires a scope, and `driver.settle()` must run before leaving
+that scope:
+
+```ts
+import { Effect } from "effect"
+import { OpenCodeDriver } from "opencode-drive"
+
+export default Effect.scoped(
+  Effect.gen(function* () {
+    const driver = yield* OpenCodeDriver.make()
+    yield* driver.ui.screenshot("home")
+    yield* driver.settle()
+  }),
+)
+```
+
+Use `opencode-drive check ./legacy-script.ts` and `start --script` for the
+Promise `defineScript` adapter described below.
+
 ## OpenCode development
 
 Run this:
@@ -77,7 +194,7 @@ While developing, you can run `opencode-drive restart` to restart only the UI (t
 
 View the [skills file](https://github.com/anomalyco/opencode-drive/blob/main/skills/opencode-drive/SKILL.md) for more details about the CLI.
 
-## Script API
+## Promise script API
 
 Scripted runs use one fully typed definition:
 

@@ -7,7 +7,11 @@ import * as Process from "../instance/process.js"
 
 const packageRoot = resolve(fileURLToPath(new URL("../..", import.meta.url)))
 
-export async function prepareScriptTooling(artifacts: string, script: string) {
+export async function prepareScriptTooling(
+  artifacts: string,
+  script: string,
+  dependencyEntry: string = script,
+) {
   const file = resolve(script)
   if (!(await Bun.file(file).exists())) throw new Error(`script not found: ${file}`)
   const packageJson: unknown = await Bun.file(join(packageRoot, "package.json")).json()
@@ -49,6 +53,7 @@ export async function prepareScriptTooling(artifacts: string, script: string) {
           target: "ESNext",
           module: "Preserve",
           moduleResolution: "Bundler",
+          allowImportingTsExtensions: true,
           skipLibCheck: true,
           types: ["bun"],
         },
@@ -62,18 +67,20 @@ export async function prepareScriptTooling(artifacts: string, script: string) {
     file,
     tsgo: join(artifacts, "node_modules", ".bin", "tsgo"),
     tsconfig: join(artifacts, "tsconfig.json"),
-    links: await linkScriptDependencies(file, artifacts),
+    links: await linkScriptDependencies(resolve(dependencyEntry), artifacts),
   }
 }
 
 async function linkLocalTooling(artifacts: string) {
   const local = {
     drive: packageRoot,
+    effect: join(packageRoot, "node_modules", "effect"),
     tsgo: join(packageRoot, "node_modules", ".bin", "tsgo"),
     bunTypes: join(packageRoot, "node_modules", "@types", "bun"),
   }
   if (
     !(await stat(local.tsgo).catch(() => undefined)) ||
+    !(await stat(local.effect).catch(() => undefined)) ||
     !(await stat(local.bunTypes).catch(() => undefined))
   )
     return false
@@ -86,6 +93,7 @@ async function linkLocalTooling(artifacts: string) {
   try {
     for (const [target, path] of [
       [local.drive, join(modules, "opencode-drive")],
+      [local.effect, join(modules, "effect")],
       [local.tsgo, join(modules, ".bin", "tsgo")],
       [local.bunTypes, join(modules, "@types", "bun")],
     ] as const) {
@@ -181,6 +189,10 @@ async function linkScriptDependencies(script: string, artifacts: string) {
     await add(
       join(modules, "opencode-drive"),
       join(artifacts, "node_modules", "opencode-drive"),
+    )
+    await add(
+      join(modules, "effect"),
+      join(artifacts, "node_modules", "effect"),
     )
     await add(
       join(modules, ".bin", "tsgo"),

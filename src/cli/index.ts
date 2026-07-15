@@ -11,6 +11,7 @@ import { list } from "./list.js"
 import { prune } from "./prune.js"
 import { restart } from "./restart.js"
 import { responses } from "./responses.js"
+import { runProgram } from "./run.js"
 import { send } from "./send.js"
 import { start } from "./start.js"
 import { stop } from "./stop.js"
@@ -56,6 +57,26 @@ const checkCommand = Command.make(
     {
       command: "opencode-drive check ./drive.ts",
       description: "Type-check a script with the bundled script API",
+    },
+  ]),
+)
+
+const runCommand = Command.make(
+  "run",
+  { module: Argument.string("module") },
+  (config) =>
+    executeEffect(
+      Effect.try({
+        try: () => toRunModule(config.module, extracted.commands, extracted.app),
+        catch: (error) => error,
+      }).pipe(Effect.flatMap(runProgram), Effect.asVoid),
+    ),
+).pipe(
+  Command.withDescription("Type-check and run a fully provided Effect program"),
+  Command.withExamples([
+    {
+      command: "opencode-drive run ./drive.ts",
+      description: "Run a default-exported Effect program",
     },
   ]),
 )
@@ -190,6 +211,7 @@ const root = Command.make("opencode-drive").pipe(
   Command.withSubcommands([
     initCommand,
     checkCommand,
+    runCommand,
     startCommand,
     sendCommand,
     screenshotCommand,
@@ -237,6 +259,18 @@ function toStartOptions(
   if (options.dev !== undefined && app.length > 0)
     throw new Error("--dev cannot be combined with a command after --")
   return options
+}
+
+function toRunModule(
+  module: string,
+  commands: ReadonlyArray<DriveCommand>,
+  app: ReadonlyArray<string>,
+) {
+  if (commands.length > 0)
+    throw new Error("run does not accept command flags")
+  if (app.length > 0)
+    throw new Error("run does not accept arguments after --")
+  return module
 }
 
 function toSendOptions(
