@@ -249,6 +249,45 @@ export const make = Effect.fn("LlmController.make")(function* (
     }
   })
 
+  const streamToolCall = Effect.fn("LlmController.streamToolCall")(function* (
+    backend: BackendConnection,
+    requestId: string,
+    toolCall: Llm.ToolCall,
+  ) {
+    const delay = toolCall.options?.delay ?? 2
+    const chunkSize = toolCall.options?.chunkSize ?? 15
+    const chunks = [...chunkText(JSON.stringify(toolCall.input), chunkSize)]
+    for (let index = 0; index < chunks.length; index++) {
+      const text = chunks[index]
+      if (text === undefined) continue
+      const callDelta =
+        index === 0
+          ? {
+              index: toolCall.index,
+              id: toolCall.id,
+              function: { name: toolCall.name, arguments: text },
+            }
+          : {
+              index: toolCall.index,
+              function: { arguments: text },
+            }
+      yield* call(
+        "llm.chunk",
+        requestId,
+        backend.rpc["llm.chunk"]({
+          id: requestId,
+          items: [
+            {
+              type: "raw",
+              chunk: { choices: [{ delta: { tool_calls: [callDelta] } }] },
+            },
+          ],
+        }),
+      )
+      if (index < chunks.length - 1 && delay > 0) yield* Effect.sleep(delay)
+    }
+  })
+
   const respond = Effect.fn("LlmController.respond")(function* (
     attachedRequest: AttachedRequest,
     output: Response,
@@ -304,7 +343,19 @@ export const make = Effect.fn("LlmController.make")(function* (
             return item.milliseconds === 0
               ? Effect.void
               : Effect.sleep(item.milliseconds)
-          case "toolCall":
+          case "toolCall": {
+            if (item.options !== undefined)
+              return streamToolCall(backend, request.id, item)
+            const { options: _, ...toolCall } = item
+            return call(
+              "llm.chunk",
+              request.id,
+              backend.rpc["llm.chunk"]({
+                id: request.id,
+                items: [toolCall],
+              }),
+            ).pipe(Effect.asVoid)
+          }
           case "raw":
             return call(
               "llm.chunk",

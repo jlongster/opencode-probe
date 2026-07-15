@@ -306,6 +306,25 @@ llm.text("A deliberately slower response", { delay: 20, chunkSize: 10 })
 `llm.reasoning()` accepts the same streaming options. Use
 `llm.pause(milliseconds)` to add timing between any two outputs.
 
+`llm.toolCall()` emits a complete call atomically by default. Pass the same
+streaming options to expose partial JSON input while it is generated:
+
+```ts
+llm.toolCall(
+  {
+    index: 0,
+    id: "call_patch",
+    name: "patch",
+    input: { patchText: "*** Begin Patch\n*** End Patch" },
+  },
+  { delay: 40, chunkSize: 12 },
+)
+```
+
+Finish a tool-calling response with `llm.finish("tool-calls")`. Streamed calls
+drive OpenCode's normal tool-input start, delta, and end lifecycle; `llm.raw()`
+remains available for provider-wire scenarios not covered by these helpers.
+
 ## Release validation
 
 Version `0.5.0` is not ready to publish until the driver consolidation is complete. Before publishing a release, run the non-publishing validation command to check, test, and inspect the packed artifact:

@@ -195,7 +195,11 @@ export interface ScriptLlm {
   reasoning(text: string, options?: LlmStreamOptions): LlmReasoning
   /** Waits locally before processing the next output. */
   pause(milliseconds: number): LlmPause
-  toolCall(call: Omit<LlmToolCall, "type">): LlmToolCall
+  /** Streams JSON input when options are provided; otherwise emits the call atomically. */
+  toolCall(
+    call: Omit<LlmToolCall, "type" | "options">,
+    options?: LlmStreamOptions,
+  ): LlmToolCall
   raw(chunk: JsonValue): LlmRawChunk
   /** Explicitly finishes a response; responses without this event finish with "stop". */
   finish(reason?: LlmFinishReason): LlmFinish

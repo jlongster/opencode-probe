@@ -44,9 +44,10 @@ export const ToolCall = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
   input: Schema.Json,
+  options: Schema.optionalKey(StreamOptions),
 })
 export interface ToolCall extends Schema.Schema.Type<typeof ToolCall> {}
-export type ToolCallInput = Omit<ToolCall, "type">
+export type ToolCallInput = Omit<ToolCall, "type" | "options">
 
 export const Raw = Schema.Struct({
   type: Schema.Literal("raw"),
@@ -101,8 +102,15 @@ export const reasoning = (text: string, options?: StreamOptions): Reasoning =>
 export const pause = (milliseconds: number): Pause =>
   Pause.make({ type: "pause", milliseconds })
 
-export const toolCall = (call: ToolCallInput): ToolCall =>
-  ToolCall.make({ ...call, type: "toolCall" })
+export const toolCall = (
+  call: ToolCallInput,
+  options?: StreamOptions,
+): ToolCall =>
+  ToolCall.make({
+    ...call,
+    type: "toolCall",
+    ...(options === undefined ? {} : { options }),
+  })
 
 export const raw = (chunk: Schema.Json): Raw => Raw.make({ type: "raw", chunk })
 

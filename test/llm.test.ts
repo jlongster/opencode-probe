@@ -28,6 +28,24 @@ describe("Llm", () => {
       name: "read",
       input: { path: "src/example.ts" },
     })
+    expect(
+      Llm.toolCall(
+        {
+          index: 1,
+          id: "call_2",
+          name: "patch",
+          input: { patchText: "*** Begin Patch\n*** End Patch" },
+        },
+        { delay: 20, chunkSize: 10 },
+      ),
+    ).toEqual({
+      type: "toolCall",
+      index: 1,
+      id: "call_2",
+      name: "patch",
+      input: { patchText: "*** Begin Patch\n*** End Patch" },
+      options: { delay: 20, chunkSize: 10 },
+    })
     expect(Llm.raw({ usage: { inputTokens: 10 } })).toEqual({
       type: "raw",
       chunk: { usage: { inputTokens: 10 } },
@@ -73,6 +91,12 @@ describe("Llm", () => {
     expect(() => Llm.text("hello", { chunkSize: 1.5 })).toThrow()
     expect(() => Llm.toolCall({ index: -1, id: "call_3", name: "read", input: {} })).toThrow()
     expect(() => Llm.toolCall({ index: 1.5, id: "call_3", name: "read", input: {} })).toThrow()
+    expect(() =>
+      Llm.toolCall(
+        { index: 0, id: "call_3", name: "read", input: {} },
+        { chunkSize: 0 },
+      ),
+    ).toThrow()
     expect(() =>
       Llm.toolCall({
         index: Number.NaN,

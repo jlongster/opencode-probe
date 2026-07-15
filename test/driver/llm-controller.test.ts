@@ -102,6 +102,99 @@ describe("LlmController", () => {
     })
   })
 
+  it.live("streams tool call input as OpenAI argument deltas", () => {
+    const random = vi.spyOn(Math, "random").mockReturnValue(0.5)
+    const peer = startTransportPeer(({ request: frame, socket }) => {
+      if (frame.method === "llm.attach")
+        socket.send(
+          JSON.stringify({
+            jsonrpc: "2.0",
+            method: "llm.request",
+            params: request,
+          }),
+        )
+      sendResult(socket, frame, frame.method === "llm.attach" ? { attached: true } : { ok: true })
+    })
+
+    return Effect.gen(function* () {
+      yield* Effect.addFinalizer(() => Effect.sync(() => random.mockRestore()))
+      yield* Effect.addFinalizer(() => Effect.promise(() => peer.stop()))
+      const backend = yield* SimulationConnector.backend(peer.url)
+      const llm = yield* LlmController.make(backend)
+      yield* llm.queue(
+        Llm.toolCall(
+          {
+            index: 0,
+            id: "call_1",
+            name: "lookup",
+            input: { query: "weather" },
+          },
+          { delay: 0, chunkSize: 10 },
+        ),
+        Llm.finish("tool-calls"),
+      )
+      yield* llm.settle()
+
+      const chunks = peer.received
+        .map(({ request: frame }) => frame)
+        .filter((frame) => frame.method === "llm.chunk")
+      expect(chunks).toEqual([
+        expect.objectContaining({
+          params: {
+            id: "exchange-1",
+            items: [
+              {
+                type: "raw",
+                chunk: {
+                  choices: [
+                    {
+                      delta: {
+                        tool_calls: [
+                          {
+                            index: 0,
+                            id: "call_1",
+                            function: {
+                              name: "lookup",
+                              arguments: '{"query":"',
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        }),
+        expect.objectContaining({
+          params: {
+            id: "exchange-1",
+            items: [
+              {
+                type: "raw",
+                chunk: {
+                  choices: [
+                    {
+                      delta: {
+                        tool_calls: [
+                          {
+                            index: 0,
+                            function: { arguments: 'weather"}' },
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        }),
+      ])
+    })
+  })
+
   it.live("serves requests and keeps titles outside normal sequencing", () => {
     const random = vi.spyOn(Math, "random").mockReturnValue(0.5)
     const titleRequest = {

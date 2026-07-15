@@ -188,6 +188,22 @@ yield* llm.queue(
 
 Each constructor returns an ordinary serializable value. Raw values with the same schema remain accepted.
 
+Tool calls remain atomic when options are omitted. Supplying stream options
+serializes the input to JSON and emits it incrementally through the simulated
+provider, producing OpenCode's normal tool-input lifecycle:
+
+```ts
+Llm.toolCall(
+  {
+    index: 0,
+    id: "call_patch",
+    name: "patch",
+    input: { patchText: "*** Begin Patch\n*** End Patch" },
+  },
+  { delay: 40, chunkSize: 12 },
+)
+```
+
 The authoritative schema is a manual union of independently named variants:
 
 ```ts
