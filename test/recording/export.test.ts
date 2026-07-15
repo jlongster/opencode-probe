@@ -204,6 +204,52 @@ test("renders distinct fallback glyphs centered in their cells", async () => {
   expect(new Set(masks).size).toBe(symbols.length)
 })
 
+test("renders OpenCode spinner frames as separate braille dots", async () => {
+  const frames = [..."⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"]
+  const image = await loadImage(
+    renderFrame({
+      cols: frames.length,
+      rows: 1,
+      cursor: { row: 0, col: 0, visible: false },
+      lines: [
+        {
+          spans: [
+            {
+              text: frames.join(""),
+              width: frames.length,
+              fg: 0xffffff,
+              bg: 0x080808,
+              attributes: 0,
+            },
+          ],
+        },
+      ],
+    }),
+  )
+  const canvas = createCanvas(frames.length * 10, 20)
+  const context = canvas.getContext("2d")
+  context.drawImage(image, 0, 0)
+  const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data
+  const masks = frames.map((_, cell) => {
+    const mask = new Uint8Array(10 * 20)
+    let maxRun = 0
+    for (let row = 0; row < 20; row++) {
+      let run = 0
+      for (let column = 0; column < 10; column++) {
+        const source = (row * canvas.width + cell * 10 + column) * 4
+        const ink = pixels[source] !== 8 || pixels[source + 1] !== 8 || pixels[source + 2] !== 8
+        mask[row * 10 + column] = ink ? 1 : 0
+        run = ink ? run + 1 : 0
+        maxRun = Math.max(maxRun, run)
+      }
+    }
+    expect(maxRun).toBeLessThanOrEqual(2)
+    return Bun.hash(mask)
+  })
+
+  expect(new Set(masks).size).toBe(frames.length)
+})
+
 test("accepts valid capture font overrides", async () => {
   const font = new URL("../../assets/fonts/commit-mono/CommitMono-400-Regular.otf", import.meta.url)
   const child = renderImport({ OPENCODE_DRIVE_FONT: fileURLToPath(font) })
