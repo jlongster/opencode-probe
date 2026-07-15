@@ -53,7 +53,7 @@ project, `project.git: true` creates a committed baseline, and `setup` runs
 before OpenCode starts. `fs.writeFile` always writes inside the simulated
 project, and setup-created files are included in that baseline.
 
-You can read the full typed API here: https://raw.githubusercontent.com/jlongster/opencode-drive/refs/heads/main/src/script/types.ts
+You can read the full typed API here: https://raw.githubusercontent.com/anomalyco/opencode-drive/refs/heads/main/src/script/types.ts
 
 ```ts
 import { defineScript } from "opencode-drive"
@@ -93,7 +93,7 @@ itself (this is extremely rare, do not use this unless explicitly asked). In thi
 mode `ui` is typed as `null`; call `server.launch()` exactly
 once before launching clients. Each `clients.launch(name)` result provides the
 same UI methods as the automatic client. You can see an example of this API
-here: https://raw.githubusercontent.com/jlongster/opencode-drive/refs/heads/main/examples/multiple-clients.ts
+here: https://raw.githubusercontent.com/anomalyco/opencode-drive/refs/heads/main/examples/multiple-clients.ts
 
 Use the exported `wait(milliseconds)` utility for an unconditional delay.
 
@@ -124,16 +124,17 @@ completion are automatic.
 
 You can see some example scripts here:
 
-- https://raw.githubusercontent.com/jlongster/opencode-drive/refs/heads/main/examples/simple.ts
-- https://raw.githubusercontent.com/jlongster/opencode-drive/refs/heads/main/examples/serve.ts
+- https://raw.githubusercontent.com/anomalyco/opencode-drive/refs/heads/main/examples/simple.ts
+- https://raw.githubusercontent.com/anomalyco/opencode-drive/refs/heads/main/examples/serve.ts
 
 ## Prune
 
 - `prune` removes artifact directories. These are always cleaned up after running a script
-  successfully, but leftover on failed runs. Always call this if a script fails.
+  successfully, but leftover on failed runs. Always call this if a script fails. Pass the
+  artifact directory name printed by `start` (for example `run-9dbc73`), not the instance name.
 
 ```bash
-opencode-drive prune --name demo
+opencode-drive prune --name run-9dbc73
 
 # --force cleans up all artifact directories
 opencode-drive prune --force
@@ -224,12 +225,17 @@ opencode-drive responses --name demo \
 ## Inspect The UI
 
 - `ui.state` prints focus and interactive element metadata as JSON.
+- `ui.capture` returns the normalized `opencode-terminal-frame-v1` terminal frame. Prefer it when terminal cells, text styles, or colors are the authoritative output.
 - `ui.matches` checks for literal, case-sensitive screen text.
 - `screenshot` prints the generated image path.
 
 ```bash
+opencode-drive send --name demo --command.ui.capture
+
 opencode-drive screenshot --name demo
 ```
+
+In scripts, call `await ui.capture()` to receive the same typed frame.
 
 ## Lifecycle
 

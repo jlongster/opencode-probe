@@ -8,7 +8,7 @@ This project gives your agents control over OpenCode:
 ## Skill
 
 ```sh
-npx skills add jlongster/opencode-drive --agent opencode --skill opencode-drive
+npx skills add anomalyco/opencode-drive --agent opencode --skill opencode-drive
 ```
 
 ## OpenCode development
@@ -65,7 +65,7 @@ opencode-drive prune --force
 
 While developing, you can run `opencode-drive restart` to restart only the UI (the server will persist as a separate process). Do this with agents, and they will always restart and get the UI where you want it to be automatically.
 
-View the [skills file](https://github.com/jlongster/opencode-drive/blob/main/skills/opencode-drive/SKILL.md) for more details about the CLI.
+View the [skills file](https://github.com/anomalyco/opencode-drive/blob/main/skills/opencode-drive/SKILL.md) for more details about the CLI.
 
 ## Script API
 
