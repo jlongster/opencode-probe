@@ -1,34 +1,51 @@
 import { defineScript, wait } from "../../src/index.js"
+import * as Effect from "effect/Effect"
 
 export default defineScript({
   launch: "manual",
-  async run({ server, clients, artifacts }) {
-    await server.launch()
-    const firstServer = Number(await Bun.file(`${artifacts}/service.pid`).text())
-    const [alice, bob] = await Promise.all([
-      clients.launch("alice", { record: true }),
-      clients.launch("bob", { record: true }),
-    ])
+  run: ({ server, clients, artifacts }) =>
+    Effect.gen(function* () {
+      yield* server.launch()
+      const firstServer = Number(
+        yield* Effect.tryPromise(() =>
+          Bun.file(`${artifacts}/service.pid`).text(),
+        ),
+      )
+      const [alice] = yield* Effect.all(
+        [
+          clients.launch("alice", { record: true }),
+          clients.launch("bob", { record: true }),
+        ],
+        { concurrency: "unbounded" },
+      )
 
-    await server.kill()
-    for (let attempt = 0; attempt < 100 && running(firstServer); attempt++)
-      await wait(10)
-    if (running(firstServer)) throw new Error("the first server is still running")
+      yield* server.kill()
+      for (let attempt = 0; attempt < 100 && running(firstServer); attempt++)
+        yield* wait(10)
+      if (running(firstServer))
+        return yield* Effect.fail(new Error("the first server is still running"))
 
-    await server.launch()
-    const secondServer = Number(await Bun.file(`${artifacts}/service.pid`).text())
-    if (secondServer === firstServer) throw new Error("the server was not relaunched")
+      yield* server.launch()
+      const secondServer = Number(
+        yield* Effect.tryPromise(() =>
+          Bun.file(`${artifacts}/service.pid`).text(),
+        ),
+      )
+      if (secondServer === firstServer)
+        return yield* Effect.fail(new Error("the server was not relaunched"))
 
-    const aliceRecording = await alice.kill()
-    const relaunchedAlice = await clients.launch("alice")
-    await relaunchedAlice.kill()
-    await server.kill()
+      const aliceRecording = yield* alice.kill()
+      const relaunchedAlice = yield* clients.launch("alice")
+      yield* relaunchedAlice.kill()
+      yield* server.kill()
 
-    await Bun.write(
-      `${artifacts}/kill-server-result.json`,
-      JSON.stringify({ firstServer, secondServer, aliceRecording }),
-    )
-  },
+      yield* Effect.tryPromise(() =>
+        Bun.write(
+          `${artifacts}/kill-server-result.json`,
+          JSON.stringify({ firstServer, secondServer, aliceRecording }),
+        ),
+      )
+    }),
 })
 
 function running(pid: number) {

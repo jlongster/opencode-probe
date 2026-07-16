@@ -1,57 +1,56 @@
-import { defineScript } from "opencode-drive"
+import { Effect, Stream } from "effect"
+import { defineScript, Llm } from "opencode-drive"
 
 export default defineScript({
-  async setup({ fs }) {
-    await fs.writeFile(
-      "src/greeting.ts",
-      [
-        "export function greeting(name: string) {",
-        '  return `Welcome, ${name}!`',
-        "}",
-        "",
-      ].join("\n"),
-    )
-  },
+  setup: ({ fs }) =>
+    Effect.gen(function* () {
+      yield* fs.writeFile(
+        "src/greeting.ts",
+        [
+          "export function greeting(name: string) {",
+          '  return `Welcome, ${name}!`',
+          "}",
+          "",
+        ].join("\n"),
+      )
+    }),
 
-  async run({ llm, ui }) {
-    let turn = 0
+  run: ({ llm, ui }) =>
+    Effect.gen(function* () {
+      let turn = 0
 
-    llm.serve(async function* (request) {
-      if (isTitleRequest(request.body)) {
-        yield { type: "textDelta", text: "Understanding the greeting" }
-        return
-      }
+      yield* llm.serve((request) => {
+        if (isTitleRequest(request.body))
+          return Stream.make(Llm.text("Understanding the greeting"))
 
-      if (turn++ === 0) {
-        yield {
-          type: "reasoningDelta",
-          text: "I should read the implementation before explaining it.",
-        }
-        yield {
-          type: "toolCall",
-          index: 0,
-          id: "call_read_greeting",
-          name: "read",
-          input: { filePath: "src/greeting.ts" },
-        }
-        yield { type: "finish", reason: "tool-calls" }
-        return
-      }
+        if (turn++ === 0)
+          return Stream.make(
+            Llm.reasoning(
+              "I should read the implementation before explaining it.",
+            ),
+            Llm.toolCall({
+              index: 0,
+              id: "call_read_greeting",
+              name: "read",
+              input: { filePath: "src/greeting.ts" },
+            }),
+            Llm.finish("tool-calls"),
+          )
 
-      for (const text of [
-        "The function accepts a name, ",
-        "places it into a welcome message, ",
-        "and adds an exclamation mark.",
-      ]) {
-        yield { type: "textDelta", text }
-        await Bun.sleep(150)
-      }
-      yield { type: "finish", reason: "stop" }
-    })
+        return Stream.make(
+          Llm.text("The function accepts a name, "),
+          Llm.pause(150),
+          Llm.text("places it into a welcome message, "),
+          Llm.pause(150),
+          Llm.text("and adds an exclamation mark."),
+          Llm.pause(150),
+          Llm.finish("stop"),
+        )
+      })
 
-    await ui.submit("Read src/greeting.ts and explain what it does.")
-    await ui.waitFor("adds an exclamation mark")
-  },
+      yield* ui.submit("Read src/greeting.ts and explain what it does.")
+      yield* ui.waitFor("adds an exclamation mark")
+    }),
 })
 
 function isTitleRequest(body: unknown) {

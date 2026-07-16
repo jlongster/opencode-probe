@@ -2,12 +2,14 @@
 
 ## Goal
 
-Make the Effect-native driver the single owner of OpenCode Drive lifecycle behavior while preserving the existing `defineScript` call sites as a Promise adapter. Promote ordinary Effect programs to the primary product, add deterministic OpenCode TUI configuration, return structured run evidence with validated path types, and replace protocol-skew timeouts with explicit compatibility negotiation.
+Make the Effect-native driver the single owner of OpenCode Drive lifecycle behavior. Make `defineScript` Effect-only alongside ordinary Effect programs, add deterministic OpenCode TUI configuration, return structured run evidence with validated path types, and replace protocol-skew timeouts with explicit compatibility negotiation.
 
 ## Invariants
 
 - `OpenCodeDriver.use` is the default safe lifecycle boundary.
-- The Promise script API remains source-compatible.
+- `defineScript` has no Promise API or compatibility shim: `setup` and `run` return Effects.
+- Script `fs`, `ui`, `llm`, `server`, and `clients` operations return Effects; `llm.serve` handlers return Streams.
+- Script cancellation is Effect interruption and runs scoped finalizers.
 - Manual scripts retain server kill/relaunch and named multi-client behavior.
 - CLI `--command.ui.*` names and payloads remain identical to OpenCode's canonical frontend protocol.
 - OpenCode configuration is expressed through normal `opencode.jsonc` and `tui.jsonc` files, not Drive-specific runtime flags.
@@ -31,7 +33,7 @@ Make the Effect-native driver the single owner of OpenCode Drive lifecycle behav
 4. Deep-merge declared configuration over project fixture files, with arrays replacing and setup mutations taking final precedence.
 5. Parse existing JSONC rather than assuming strict JSON.
 6. Write normalized `.opencode/opencode.jsonc` and `.opencode/tui.jsonc` before creating the optional Git baseline.
-7. Verify the same behavior through Promise scripts and the Effect driver.
+7. Verify the same behavior through Effect scripts and the Effect driver.
 
 ## Phase 2: Effect Program Runner
 
@@ -48,9 +50,9 @@ Make the Effect-native driver the single owner of OpenCode Drive lifecycle behav
 1. Make LLM response state independent of one backend connection and attach it per server generation.
 2. Introduce an Effect-native server-generation controller over one prepared `OpenCodeInstance`.
 3. Add Effect-native named client creation, name release, unexpected-exit observation, and relaunch.
-4. Reuse the Effect UI implementation for Promise scripts, including effectful predicates at the adapter boundary.
+4. Reuse the Effect UI implementation directly for `defineScript`, including effectful polling and predicates.
 5. Add an internal driver constructor over an already prepared instance.
-6. Replace Promise-side backend, UI polling, LLM routing, recording finalization, and client ownership with shallow adapters.
+6. Route `defineScript` backend, UI polling, LLM routing, recording finalization, and client ownership through the shared Effect services.
 7. Delete duplicated lifecycle implementations only after all characterization tests pass.
 8. Replace interruption-sensitive cached terminal operations with shared independently owned settlement effects.
 

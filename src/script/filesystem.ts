@@ -1,5 +1,6 @@
 import { lstat, mkdir, writeFile } from "node:fs/promises"
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path"
+import * as Effect from "effect/Effect"
 import type { ScriptFileSystem } from "./types.js"
 
 interface FileSystemOptions {
@@ -12,11 +13,15 @@ export function createScriptFileSystem(
 ): ScriptFileSystem {
   const root = resolve(directory)
   return {
-    async writeFile(path, contents) {
-      const destination = await resolveFile(root, path, options)
-      await mkdir(dirname(destination), { recursive: true })
-      await writeFile(destination, contents)
-    },
+    writeFile: (path, contents) =>
+      Effect.tryPromise({
+        try: async () => {
+          const destination = await resolveFile(root, path, options)
+          await mkdir(dirname(destination), { recursive: true })
+          await writeFile(destination, contents)
+        },
+        catch: (cause) => cause instanceof Error ? cause : new Error(String(cause)),
+      }),
   }
 }
 

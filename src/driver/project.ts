@@ -41,17 +41,15 @@ export const make = Effect.fn("OpenCodeProject.make")(function* (
             catch: () => undefined,
           }).pipe(Effect.ignore),
   )
-  yield* Effect.tryPromise({
-    try: () =>
-      prepareInstanceProject({
-        artifacts,
-        project: options.project,
-        config: options.config,
-        tui: options.tui,
-        setup: options.setup,
-      }),
-    catch: (cause) => error("project.prepare", cause),
-  })
+  yield* prepareInstanceProject({
+    artifacts,
+    project: options.project,
+    config: options.config,
+    tui: options.tui,
+    setup: options.setup,
+  }).pipe(
+    Effect.mapError((cause) => error("project.prepare", cause)),
+  )
   return { artifacts }
 })
 

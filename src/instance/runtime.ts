@@ -125,17 +125,15 @@ export const make = Effect.fn("OpenCodeInstance.make")(function* (
     options.tui !== undefined ||
     setup !== undefined
   )
-    yield* Effect.tryPromise({
-      try: () =>
-        prepareInstanceProject({
-          artifacts,
-          project: options.project,
-          config: options.config,
-          tui: options.tui,
-          setup,
-        }),
-      catch: (cause) => instanceError("prepare project", cause),
-    })
+    yield* prepareInstanceProject({
+      artifacts,
+      project: options.project,
+      config: options.config,
+      tui: options.tui,
+      setup,
+    }).pipe(
+      Effect.mapError((cause) => instanceError("prepare project", cause)),
+    )
   const environment = stripGitEnvironment({
     ...process.env,
     ...options.env,

@@ -66,10 +66,20 @@ export function composeSetup(
   setup: ScriptSetup | undefined,
 ): ScriptSetup | undefined {
   if (tools === undefined && setup === undefined) return undefined
-  return async (context) => {
-    await setup?.(context)
-    controller.configure(context.config)
-  }
+  return (context) =>
+    Effect.suspend(() => {
+      const configured: unknown = setup?.(context) ?? Effect.void
+      if (!isEffect(configured))
+        return Effect.fail(new Error("script setup must return an Effect"))
+      return configured.pipe(
+        Effect.asVoid,
+        Effect.andThen(Effect.sync(() => controller.configure(context.config))),
+      )
+    })
+}
+
+function isEffect(value: unknown): value is Effect.Effect<unknown, unknown> {
+  return Effect.isEffect(value)
 }
 
 export const make = Effect.fn("ToolController.make")(function* (setup?: Setup) {

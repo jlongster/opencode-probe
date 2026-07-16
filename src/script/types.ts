@@ -1,3 +1,5 @@
+import type * as Effect from "effect/Effect"
+import type * as Stream from "effect/Stream"
 import type * as Llm from "../llm/index.js"
 import type * as Tool from "../tool/index.js"
 
@@ -19,7 +21,7 @@ export interface OpenCodeTuiConfig extends JsonObject {}
 
 export interface ScriptFileSystem {
   /** Writes inside the simulated project and creates parent directories. */
-  writeFile(path: string, contents: string | Uint8Array): Promise<void>
+  writeFile(path: string, contents: string | Uint8Array): Effect.Effect<void, Error>
 }
 
 export interface UiKeyModifiers {
@@ -98,46 +100,38 @@ export interface UiViewport {
   readonly rows: number
 }
 
-export type UiPredicate = (state: UiState) => boolean | Promise<boolean>
+export type UiPredicate = (
+  state: UiState,
+) => boolean | Effect.Effect<boolean, Error>
 
 export interface ScriptUi {
   /** Terminates this TUI. The client name may be launched again afterward. */
-  kill(): Promise<string | undefined>
-  state(): Promise<UiState>
-  matches(matcher: UiMatcher): Promise<boolean>
-  screenshot(name?: string): Promise<string>
+  kill(): Effect.Effect<string | undefined, unknown>
+  state(): Effect.Effect<UiState, unknown>
+  matches(matcher: UiMatcher): Effect.Effect<boolean, unknown>
+  screenshot(name?: string): Effect.Effect<string, unknown>
 
-  type(text: string): Promise<UiState>
-  press(key: string, modifiers?: UiKeyModifiers): Promise<UiState>
-  enter(): Promise<UiState>
-  arrow(direction: UiDirection): Promise<UiState>
-  focus(target: number | UiElement): Promise<UiState>
+  type(text: string): Effect.Effect<UiState, unknown>
+  press(key: string, modifiers?: UiKeyModifiers): Effect.Effect<UiState, unknown>
+  enter(): Effect.Effect<UiState, unknown>
+  arrow(direction: UiDirection): Effect.Effect<UiState, unknown>
+  focus(target: number | UiElement): Effect.Effect<UiState, unknown>
   /** Clicks the element center unless a local position is provided. */
-  click(target: number | UiElement, position?: UiPosition): Promise<UiState>
-  resize(viewport: UiViewport): Promise<UiState>
-  submit(text: string): Promise<UiState>
+  click(target: number | UiElement, position?: UiPosition): Effect.Effect<UiState, unknown>
+  resize(viewport: UiViewport): Effect.Effect<UiState, unknown>
+  submit(text: string): Effect.Effect<UiState, unknown>
 
-  waitFor(matcher: UiMatcher, options?: UiWaitOptions): Promise<UiState>
-  waitFor(predicate: UiPredicate, options?: UiWaitOptions): Promise<UiState>
+  waitFor(matcher: UiMatcher, options?: UiWaitOptions): Effect.Effect<UiState, unknown>
+  waitFor(predicate: UiPredicate, options?: UiWaitOptions): Effect.Effect<UiState, unknown>
   /** Waits for exactly one element matching a renderable number, id, or query. */
-  getElement(target: number, options?: UiWaitOptions): Promise<UiElement>
-  getElement(id: string, options?: UiWaitOptions): Promise<UiElement>
-  getElement(query: UiElementQuery, options?: UiWaitOptions): Promise<UiElement>
-}
-
-export interface LlmTextDelta {
-  readonly type: "textDelta"
-  readonly text: string
+  getElement(target: number, options?: UiWaitOptions): Effect.Effect<UiElement, unknown>
+  getElement(id: string, options?: UiWaitOptions): Effect.Effect<UiElement, unknown>
+  getElement(query: UiElementQuery, options?: UiWaitOptions): Effect.Effect<UiElement, unknown>
 }
 
 export type LlmStreamOptions = Llm.StreamOptions
 
 export type LlmText = Llm.Text
-
-export interface LlmReasoningDelta {
-  readonly type: "reasoningDelta"
-  readonly text: string
-}
 
 export type LlmReasoning = Llm.Reasoning
 
@@ -147,22 +141,14 @@ export type LlmToolCall = Llm.ToolCall
 
 export type LlmRawChunk = Llm.Raw
 
-export type LlmItem =
-  | LlmTextDelta
-  | LlmReasoningDelta
-  | LlmToolCall
-  | LlmRawChunk
-
 export type LlmFinishReason = Llm.FinishReason
 
 export type LlmFinish = Llm.Finish
 
 export type LlmDisconnect = Llm.Disconnect
 
-export type LlmOutput =
-  | Llm.Output
-  // Legacy scripts may still send protocol-level deltas directly.
-  | LlmItem
+export type LlmOutput = Llm.Output
+export type LlmItem = Llm.Output
 
 export interface LlmRequest {
   readonly id: string
@@ -170,7 +156,7 @@ export interface LlmRequest {
   readonly body: JsonValue
 }
 
-export type LlmResponse = Iterable<LlmOutput> | AsyncIterable<LlmOutput>
+export type LlmResponse = Stream.Stream<LlmOutput, unknown>
 
 export type LlmServeHandler = (
   request: LlmRequest,
@@ -180,17 +166,17 @@ export type LlmServeHandler = (
 export type LlmTitleHandler = (
   request: LlmRequest,
   index: number,
-) => string | Promise<string>
+) => Effect.Effect<string, unknown>
 
 export interface ScriptLlm {
   /** Queues one response composed of these chunks and terminal events. */
-  queue(...output: ReadonlyArray<LlmOutput>): void
+  queue(...output: ReadonlyArray<LlmOutput>): Effect.Effect<void, unknown>
   /** Waits for the next request and resolves after its response is accepted. */
-  send(...output: ReadonlyArray<LlmOutput>): Promise<void>
+  send(...output: ReadonlyArray<LlmOutput>): Effect.Effect<void, unknown>
   /** Generates a response for every LLM request until the script ends. */
-  serve(handler: LlmServeHandler): void
+  serve(handler: LlmServeHandler): Effect.Effect<void, unknown>
   /** Overrides the default response for background title requests. */
-  title(handler: LlmTitleHandler): void
+  title(handler: LlmTitleHandler): Effect.Effect<void, unknown>
 
   text(text: string, options?: LlmStreamOptions): LlmText
   reasoning(text: string, options?: LlmStreamOptions): LlmReasoning
@@ -225,7 +211,7 @@ export interface ScriptProject {
 
 export interface ScriptClients {
   /** Launches a headless TUI connected to this script's shared service. */
-  launch(name: string, options?: ScriptClientOptions): Promise<ScriptUi>
+  launch(name: string, options?: ScriptClientOptions): Effect.Effect<ScriptUi, unknown>
 }
 
 export interface ScriptClientOptions {
@@ -237,9 +223,9 @@ export interface ScriptClientOptions {
 
 export interface ScriptServer {
   /** Launches the one shared OpenCode server for this script. */
-  launch(): Promise<void>
+  launch(): Effect.Effect<void, unknown>
   /** Stops the shared server. It may be launched again afterward. */
-  kill(): Promise<void>
+  kill(): Effect.Effect<void, unknown>
 }
 
 export interface ScriptContext {
@@ -249,7 +235,6 @@ export interface ScriptContext {
   readonly server: ScriptServer
   readonly llm: ScriptLlm
   readonly artifacts: string
-  readonly signal: AbortSignal
 }
 
 export interface ManualScriptContext extends Omit<ScriptContext, "ui"> {
@@ -258,12 +243,12 @@ export interface ManualScriptContext extends Omit<ScriptContext, "ui"> {
 
 export type ScriptSetup = (
   context: ScriptSetupContext,
-) => void | Promise<void>
+) => Effect.Effect<void, unknown>
 
-export type ScriptRun = (context: ScriptContext) => void | Promise<void>
+export type ScriptRun = (context: ScriptContext) => Effect.Effect<void, unknown>
 export type ManualScriptRun = (
   context: ManualScriptContext,
-) => void | Promise<void>
+) => Effect.Effect<void, unknown>
 
 export interface AutomaticScriptDefinition {
   /** Declares the isolated project OpenCode runs against. */

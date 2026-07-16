@@ -1,5 +1,6 @@
 import { join, resolve } from "node:path"
 import { pathToFileURL } from "node:url"
+import * as Deferred from "effect/Deferred"
 import * as Effect from "effect/Effect"
 import * as Stream from "effect/Stream"
 import * as OpenCodeDriver from "../driver/index.js"
@@ -10,8 +11,6 @@ import * as Llm from "../llm/index.js"
 import { createScriptFileSystem } from "../script/filesystem.js"
 import { hasGitMetadata } from "../script/project.js"
 import type {
-  LlmOutput,
-  LlmResponse,
   ScriptClientOptions,
   ScriptDefinition,
   ScriptLlm,
@@ -22,19 +21,22 @@ import type {
   UiWaitOptions,
 } from "../script/types.js"
 
-export async function loadScript(file: string): Promise<ScriptDefinition> {
-  const module: { readonly default?: unknown } = await import(
-    pathToFileURL(resolve(file)).href
-  )
-  if (!isScriptDefinition(module.default))
-    throw new Error("script must default-export defineScript({ project?, setup?, run })")
-  return module.default
-}
+export const loadScript = Effect.fn("DriveCli.loadScript")((file: string) =>
+  Effect.tryPromise({
+    try: () => import(pathToFileURL(resolve(file)).href) as Promise<{ readonly default?: unknown }>,
+    catch: (cause) => cause,
+  }).pipe(
+    Effect.flatMap((module) =>
+      isScriptDefinition(module.default)
+        ? Effect.succeed(module.default)
+        : Effect.fail(new Error("script must default-export defineScript({ project?, setup?, run })")),
+    ),
+  ),
+)
 
 export const runScript = Effect.fn("DriveCli.runScript")(function* (
   script: ScriptDefinition,
   instance: OpenCodeInstance.Instance,
-  signal: AbortSignal,
   onScreenshot?: (path: string) => void,
   onRecording?: (path: string) => void,
   onReady?: () => void,
@@ -45,97 +47,90 @@ export const runScript = Effect.fn("DriveCli.runScript")(function* (
     clientName: "default",
     client: { viewport: script.viewport },
   })
-  const localAbort = new AbortController()
-  const scriptSignal = AbortSignal.any([signal, localAbort.signal])
-  yield* Effect.addFinalizer(() =>
-    Effect.sync(() => localAbort.abort(new Error("script finished"))),
-  )
   const protectGit = yield* Effect.promise(() =>
     hasGitMetadata(join(instance.artifacts, "files")),
   )
-  const operationFailure = Promise.withResolvers<never>()
-  void operationFailure.promise.catch(() => undefined)
+  const operationFailure = yield* Deferred.make<never, unknown>()
+  const run = <A, E>(effect: Effect.Effect<A, E>) =>
+    effect.pipe(
+      Effect.tapError((cause) =>
+        isTimeoutError(cause)
+          ? Deferred.fail(operationFailure, cause).pipe(Effect.asVoid)
+          : Effect.void,
+      ),
+    )
   const recordings = new Set<string>()
   const reportRecording = (path: string) => {
     if (recordings.has(path)) return
     recordings.add(path)
     onRecording?.(path)
   }
-  const run = <A, E>(effect: Effect.Effect<A, E>): Promise<A> => {
-    const promise = Effect.runPromise(effect, { signal: scriptSignal })
-    void promise.catch((cause) => {
-      if (isTimeoutError(cause)) {
-        if (!localAbort.signal.aborted) localAbort.abort(cause)
-        operationFailure.reject(cause)
-      }
-    })
-    return promise
-  }
-  const runBackground = <A, E>(effect: Effect.Effect<A, E>) => {
-    const promise = run(effect)
-    void promise.catch((cause) => operationFailure.reject(cause))
-    return promise
-  }
   const adaptUi = (client: OpenCodeClient.Client): ScriptUi => {
     const ui = client.ui
-    const call = <A, E>(effect: Effect.Effect<A, E>) => run(effect)
     return {
-      async kill() {
-        const output = client.recording === undefined
-          ? undefined
-          : await call(client.recording.finish())
-        if (output !== undefined) reportRecording(output)
-        await call(client.close())
-        return output
-      },
-      state: () => call(ui.state()),
-      matches: (matcher) => call(ui.matches(matcher)),
-      async screenshot(name) {
-        const path = await call(ui.screenshot(name))
-        onScreenshot?.(path)
-        return path
-      },
-      type: (text) => call(ui.type(text)),
-      press: (key, modifiers) => call(ui.press(key, modifiers)),
-      enter: () => call(ui.enter()),
-      arrow: (direction) => call(ui.arrow(direction)),
-      focus: (target) => call(ui.focus(target)),
-      click: (target, position) => call(ui.click(target, position)),
-      resize: (viewport) => call(ui.resize(viewport)),
-      submit: (text) => call(ui.submit(text)),
+      kill: () =>
+        run(Effect.gen(function* () {
+          const output = client.recording === undefined
+            ? undefined
+            : yield* client.recording.finish()
+          if (output !== undefined) reportRecording(output)
+          yield* client.close()
+          return output
+        })),
+      state: () => run(ui.state()),
+      matches: (matcher) => run(ui.matches(matcher)),
+      screenshot: (name) => run(ui.screenshot(name)).pipe(Effect.tap((path) => Effect.sync(() => onScreenshot?.(path)))),
+      type: (text) => run(ui.type(text)),
+      press: (key, modifiers) => run(ui.press(key, modifiers)),
+      enter: () => run(ui.enter()),
+      arrow: (direction) => run(ui.arrow(direction)),
+      focus: (target) => run(ui.focus(target)),
+      click: (target, position) => run(ui.click(target, position)),
+      resize: (viewport) => run(ui.resize(viewport)),
+      submit: (text) => run(ui.submit(text)),
       waitFor(target: UiMatcher | UiPredicate, options?: UiWaitOptions) {
-        return call(
-          typeof target === "string"
-            ? ui.waitFor(target, options)
-            : ui.waitForEffect(
-                (state) =>
-                  Effect.tryPromise({
-                    try: () => Promise.resolve(target(state)),
-                    catch: (cause) =>
-                      cause instanceof Error ? cause : new Error(String(cause)),
-                  }),
-                options,
+        if (typeof target === "string") return run(ui.waitFor(target, options))
+        return run(
+          ui.waitForEffect(
+            (state) =>
+              Effect.try({
+                try: (): unknown => target(state),
+                catch: toError,
+              }).pipe(
+                Effect.flatMap((result) => {
+                  if (isEffect(result))
+                    return result.pipe(
+                      Effect.mapError(toError),
+                      Effect.flatMap((value) =>
+                        typeof value === "boolean"
+                          ? Effect.succeed(value)
+                          : Effect.fail(new Error("ui.waitFor predicate Effect must produce a boolean")),
+                      ),
+                    )
+                  if (typeof result === "boolean") return Effect.succeed(result)
+                  return Effect.fail(new Error("ui.waitFor predicate must return a boolean or Effect"))
+                }),
               ),
+            options,
+          ),
         )
       },
       getElement: (
         target: number | string | UiElementQuery,
         options?: UiWaitOptions,
-      ) => call(ui.getElement(target, options)),
+      ) => run(ui.getElement(target, options)),
     }
   }
-  const llm = adaptLlm(prepared.llm, run, runBackground)
+  const llm = adaptLlm(prepared.llm, run)
   const clients = {
     launch: (name: string, options?: ScriptClientOptions) =>
-      run(
-        prepared.clients.launch(name, {
+      run(prepared.clients.launch(name, {
           recording: options?.record,
           viewport: options?.viewport ?? script.viewport,
-        }),
-      ).then((client) => {
-        onReady?.()
-        return adaptUi(client)
-      }),
+        })).pipe(
+          Effect.tap(() => Effect.sync(() => onReady?.())),
+          Effect.map(adaptUi),
+        ),
   }
   const context = {
     fs: createScriptFileSystem(join(instance.artifacts, "files"), {
@@ -148,74 +143,45 @@ export const runScript = Effect.fn("DriveCli.runScript")(function* (
     },
     llm,
     artifacts: instance.artifacts,
-    signal: scriptSignal,
   }
   const primaryClient = prepared.primary
-  const execution = Promise.resolve(
+  const execution =
     "launch" in script
       ? script.run({ ...context, ui: null })
-      : script.run({ ...context, ui: adaptUi(primaryClient!) }),
-  )
+      : script.run({ ...context, ui: adaptUi(primaryClient!) })
+  if (!Effect.isEffect(execution))
+    return yield* Effect.fail(new Error("script run must return an Effect"))
   if (primaryClient !== undefined) onReady?.()
-  yield* Effect.tryPromise({
-    try: async () => {
-      try {
-        await Promise.race([
-          execution,
-          operationFailure.promise,
-          Effect.runPromise(prepared.failure),
-          aborted(scriptSignal),
-        ])
-      } catch (cause) {
-        if (isZeroStatusClientExit(cause)) {
-          localAbort.abort(cause)
-          await execution
-          return
-        }
-        throw cause
-      }
-    },
-    catch: (cause) => cause,
-  })
+  yield* Effect.raceAllFirst([
+    execution,
+    Deferred.await(operationFailure),
+    prepared.failure.pipe(
+      Effect.catchIf(isZeroStatusClientExit, () => Effect.void),
+    ),
+  ])
   const settlement = yield* prepared.settle()
   for (const path of settlement.recordings) reportRecording(path)
 })
 
 function adaptLlm(
   controller: OpenCodeDriver.Llm,
-  run: <A, E>(effect: Effect.Effect<A, E>) => Promise<A>,
-  runBackground: <A, E>(effect: Effect.Effect<A, E>) => Promise<A>,
+  run: <A, E>(effect: Effect.Effect<A, E>) => Effect.Effect<A, E>,
 ): ScriptLlm {
   return {
-    queue(...output) {
-      void runBackground(controller.queue(...output.map(normalizeOutput)))
-    },
-    send: (...output) => run(controller.send(...output.map(normalizeOutput))),
-    serve(handler) {
-      void runBackground(
-        controller.serve((request, index) =>
-          responseStream(() => handler(request, index)),
+    queue: (...output) => run(controller.queue(...output)),
+    send: (...output) => run(controller.send(...output)),
+    serve: (handler) =>
+      run(controller.serve((request, index) =>
+        handler(request, index).pipe(
+          Stream.mapError((cause) => llmError("serve", cause, request.id)),
         ),
-      )
-    },
-    title(handler) {
-      void runBackground(
-        controller.title((request, index) =>
-          Effect.tryPromise({
-            try: () => Promise.resolve(handler(request, index)),
-            catch: (cause) => cause,
-          }).pipe(
-            Effect.mapError((cause) =>
-              new OpenCodeDriver.LlmControllerError({
-                operation: "title",
-                requestId: request.id,
-                message: cause instanceof Error ? cause.message : String(cause),
-              }),
-            ),
-          ),
+      )),
+    title: (handler) =>
+      run(controller.title((request, index) =>
+        handler(request, index).pipe(
+          Effect.mapError((cause) => llmError("title", cause, request.id)),
         ),
-      )
-    },
+      )),
     text: Llm.text,
     reasoning: Llm.reasoning,
     pause: Llm.pause,
@@ -226,35 +192,20 @@ function adaptLlm(
   }
 }
 
-function responseStream(make: () => LlmResponse) {
-  const iterable = {
-    async *[Symbol.asyncIterator]() {
-      for await (const item of make()) yield normalizeOutput(item)
-    },
-  }
-  return Stream.fromAsyncIterable(iterable, (cause) =>
-    new OpenCodeDriver.LlmControllerError({
-      operation: "serve",
-      message: cause instanceof Error ? cause.message : String(cause),
-    }),
-  )
-}
-
-function normalizeOutput(output: LlmOutput): Llm.Output {
-  if (output.type === "textDelta" || output.type === "reasoningDelta")
-    return Llm.raw({ type: output.type, text: output.text })
-  return output
-}
-
-function aborted(signal: AbortSignal) {
-  return new Promise<never>((_resolve, reject) => {
-    if (signal.aborted) return reject(signal.reason ?? new Error("script aborted"))
-    signal.addEventListener(
-      "abort",
-      () => reject(signal.reason ?? new Error("script aborted")),
-      { once: true },
-    )
+function llmError(operation: string, cause: unknown, requestId?: string) {
+  return new OpenCodeDriver.LlmControllerError({
+    operation,
+    requestId,
+    message: cause instanceof Error ? cause.message : String(cause),
   })
+}
+
+function toError(cause: unknown) {
+  return cause instanceof Error ? cause : new Error(String(cause))
+}
+
+function isEffect(value: unknown): value is Effect.Effect<unknown, unknown> {
+  return Effect.isEffect(value)
 }
 
 function isZeroStatusClientExit(cause: unknown) {

@@ -1,50 +1,70 @@
-import { defineScript, wait } from "opencode-drive"
+import { Effect, Stream } from "effect"
+import { defineScript, Llm, wait } from "opencode-drive"
 
 export default defineScript({
   launch: "manual",
 
-  async run({ server, clients, llm }) {
-    await server.launch()
+  run: ({ server, clients, llm }) =>
+    Effect.gen(function* () {
+      yield* server.launch()
 
-    llm.serve((_request, index) => [
-      llm.text(`Response for request ${index + 1}`),
-    ])
+      yield* llm.serve((_request, index) =>
+        Stream.make(Llm.text(`Response for request ${index + 1}`)),
+      )
 
-    const [alice, bob] = await Promise.all([
-      clients.launch("alice", { record: true }),
-      clients.launch("bob", { record: true }),
-    ])
+      const [alice, bob] = yield* Effect.all(
+        [
+          clients.launch("alice", { record: true }),
+          clients.launch("bob", { record: true }),
+        ],
+        { concurrency: "unbounded" },
+      )
 
-    await Promise.all([
-      alice.submit("Reply to Alice"),
-      bob.submit("Reply to Bob"),
-    ])
-    await Promise.all([
-      alice.screenshot("multiple-clients-alice-submitted"),
-      bob.screenshot("multiple-clients-bob-submitted"),
-    ])
-    await Promise.all([
-      alice.waitFor("Response for request", { timeout: 30_000 }),
-      bob.waitFor("Response for request", { timeout: 30_000 }),
-    ])
+      yield* Effect.all(
+        [alice.submit("Reply to Alice"), bob.submit("Reply to Bob")],
+        { concurrency: "unbounded" },
+      )
+      yield* Effect.all(
+        [
+          alice.screenshot("multiple-clients-alice-submitted"),
+          bob.screenshot("multiple-clients-bob-submitted"),
+        ],
+        { concurrency: "unbounded" },
+      )
+      yield* Effect.all(
+        [
+          alice.waitFor("Response for request", { timeout: 30_000 }),
+          bob.waitFor("Response for request", { timeout: 30_000 }),
+        ],
+        { concurrency: "unbounded" },
+      )
 
-    await Promise.all([
-      alice.screenshot("multiple-clients-alice-complete"),
-      bob.screenshot("multiple-clients-bob-complete"),
-    ])
+      yield* Effect.all(
+        [
+          alice.screenshot("multiple-clients-alice-complete"),
+          bob.screenshot("multiple-clients-bob-complete"),
+        ],
+        { concurrency: "unbounded" },
+      )
 
-    await server.kill()
-    await wait(500)
-    await Promise.all([
-      alice.screenshot("multiple-clients-alice-server-stopped"),
-      bob.screenshot("multiple-clients-bob-server-stopped"),
-    ])
+      yield* server.kill()
+      yield* wait(500)
+      yield* Effect.all(
+        [
+          alice.screenshot("multiple-clients-alice-server-stopped"),
+          bob.screenshot("multiple-clients-bob-server-stopped"),
+        ],
+        { concurrency: "unbounded" },
+      )
 
-    await server.launch()
-    await wait(1000)
-    await Promise.all([
-      alice.screenshot("multiple-clients-alice-server-relaunched"),
-      bob.screenshot("multiple-clients-bob-server-relaunched"),
-    ])
-  },
+      yield* server.launch()
+      yield* wait(1000)
+      yield* Effect.all(
+        [
+          alice.screenshot("multiple-clients-alice-server-relaunched"),
+          bob.screenshot("multiple-clients-bob-server-relaunched"),
+        ],
+        { concurrency: "unbounded" },
+      )
+    }),
 })

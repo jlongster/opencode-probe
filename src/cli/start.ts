@@ -1,4 +1,6 @@
 import * as Effect from "effect/Effect"
+import * as Cause from "effect/Cause"
+import * as Exit from "effect/Exit"
 import { toStringUnknown } from "effect/Inspectable"
 import { initializeInstance } from "../instance/instance.js"
 import * as DriveProcess from "../instance/process.js"
@@ -55,15 +57,10 @@ const startScoped = Effect.fn("DriveCli.startScoped")(function* (options: StartO
       )
     : undefined
   const script = scriptTooling
-    ? yield* fromPromise(async () => {
-        try {
-          logSuccess(`loading script ${scriptTooling.file}`)
-          return await loadScript(scriptTooling.file)
-        } catch (error) {
-          await scriptTooling.links.remove()
-          throw error
-        }
-      })
+    ? yield* loadScript(scriptTooling.file).pipe(
+        Effect.tap(() => Effect.sync(() => logSuccess(`loading script ${scriptTooling.file}`))),
+        Effect.onError(() => fromPromise(() => scriptTooling.links.remove()).pipe(Effect.ignore)),
+      )
     : undefined
   if (script && "launch" in script && options.record) {
     return yield* Effect.fail(new Error("--record is not supported when launch is manual"))
@@ -193,9 +190,7 @@ async function runLifecycle(
           const previous = current
           const restartReason = new Error("script restarted")
           previous?.abort.abort(restartReason)
-          await previous?.promise.catch((error) => {
-            if (error !== restartReason) throw error
-          })
+          await previous?.promise
           driveReady = false
           await runEffect(instance.restart)
           recording = undefined
@@ -460,18 +455,22 @@ function run(
     }
     if (driveScript) {
       logSuccess("running script")
-      await runEffect(
+      const exit = await Effect.runPromiseExit(
         Effect.scoped(
           runScript(
             driveScript,
             instance,
-            abort.signal,
             onScreenshot,
             onRecording,
             ready,
           ),
         ),
+        { signal: abort.signal },
       )
+      if (Exit.isFailure(exit)) {
+        if (abort.signal.aborted && Cause.hasInterruptsOnly(exit.cause)) return
+        throw Cause.squash(exit.cause)
+      }
       ready()
       logSuccess("script completed")
       return

@@ -26,9 +26,8 @@ opencode-drive run ./drive.ts
 ```
 
 The command accepts no flags and no arguments after `--`. Use the driver API in
-the module for simulation control. `opencode-drive check` remains the contract
-checker for Promise `defineScript` modules, and `start --script` remains their
-execution path.
+the module for simulation control. `opencode-drive check` validates Effect-only
+`defineScript` modules, and `start --script` executes them.
 
 ## `use` settles one scoped driver
 
@@ -296,63 +295,54 @@ yield* llm.queue(
 
 Responses without an explicit terminal output finish with `"stop"`. Title requests remain separate and do not consume this queue.
 
-## Current and Effect call sites map directly
+## `defineScript` is Effect-only
+
+`defineScript` does not provide a Promise adapter. Its `setup` and `run`
+callbacks return Effects, as do operations on `fs`, `ui`, `llm`, `server`,
+and `clients`. Compose script operations in the same runtime with
+`yield*` or Effect operators.
 
 ### Primary UI
 
-Current:
-
 ```ts
+import { Effect } from "effect"
+import { defineScript } from "opencode-drive"
+
 export default defineScript({
-  async run({ ui, llm }) {
-    llm.queue(llm.text("The value is 1."))
-    await ui.submit("Read src/example.ts")
-    await ui.waitFor("The value is 1.")
-  },
+  run: ({ ui, llm }) =>
+    Effect.gen(function* () {
+      yield* llm.queue(llm.text("The value is 1."))
+      yield* ui.submit("Read src/example.ts")
+      yield* ui.waitFor("The value is 1.")
+    }),
 })
 ```
 
-Effect:
+`llm.serve` accepts a handler that returns an Effect `Stream`. The registration
+itself is also an Effect:
 
 ```ts
-const driver = yield* OpenCodeDriver.make()
-const { ui, llm } = driver
+import { Stream } from "effect"
 
-yield* llm.queue(
-  Llm.text("The value is 1."),
+yield* llm.serve((_request, index) =>
+  Stream.make(llm.text(`Response ${index + 1}`)),
 )
-yield* ui.submit("Read src/example.ts")
-yield* ui.waitFor("The value is 1.")
-yield* driver.settle()
 ```
+
+Predicates passed to `ui.waitFor` may return a boolean or an Effect.
 
 ### Additional client
 
-Current:
-
 ```ts
-await server.launch()
-const alice = await clients.launch("alice")
-const bob = await clients.launch("bob")
+yield* server.launch()
+const alice = yield* clients.launch("alice")
+const bob = yield* clients.launch("bob")
 
-await alice.submit("Hello from Alice")
-await bob.screenshot("bob-view")
-```
-
-Effect:
-
-```ts
-const oc = yield* OpenCodeDriver.make()
-const secondary = yield* oc.clients.make()
-
-yield* oc.ui.submit("Hello from the primary client")
-yield* secondary.ui.screenshot("secondary-view")
-yield* oc.settle()
+yield* alice.submit("Hello from Alice")
+yield* bob.screenshot("bob-view")
 ```
 
 ### Client configuration
-
-Current:
 
 ```ts
 export default defineScript({
@@ -360,32 +350,21 @@ export default defineScript({
     cols: 118,
     rows: 34,
   },
-  async run({ ui }) {
-    await ui.screenshot("home")
-  },
+  run: ({ ui }) => ui.screenshot("home").pipe(Effect.asVoid),
 })
 ```
 
-Effect:
-
-```ts
-const driver = yield* OpenCodeDriver.make({
-  client: {
-    viewport: {
-      cols: 118,
-      rows: 34,
-    },
-  },
-})
-const { ui } = driver
-
-yield* ui.screenshot("home")
-yield* driver.settle()
-```
+Script cancellation uses Effect interruption. Interrupting the script or an
+operation's fiber interrupts in-flight work and runs its scoped finalizers;
+there is no `AbortSignal`, Promise cancellation convention, or compatibility
+shim.
 
 ## Settled interface
 
 - The API is Effect-native.
+- `defineScript` accepts only Effect-returning `setup` and `run` callbacks.
+- Script capability methods return Effects; `llm.serve` handlers return Streams.
+- Cancellation uses Effect interruption, without a Promise compatibility shim.
 - `OpenCodeDriver.use(options, run)` is the safe top-level bracket and performs typed settlement.
 - `OpenCodeDriver.make(options)` is the primary scoped constructor.
 - Programs that call `make` directly call terminal `driver.settle()` before leaving the scope.

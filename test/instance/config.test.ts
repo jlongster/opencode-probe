@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "vitest"
 import { rm } from "node:fs/promises"
 import { join } from "node:path"
+import * as Effect from "effect/Effect"
 import {
   initializeInstance,
   prepareInstanceProject,
@@ -20,7 +21,7 @@ describe("instance configuration", () => {
   test("merges JSONC fixtures, replaces arrays, applies setup last, and commits normalized files", async () => {
     const root = await initializeInstance()
     artifacts.push(root)
-    await prepareInstanceProject({
+    await Effect.runPromise(prepareInstanceProject({
       artifacts: root,
       project: {
         git: true,
@@ -45,13 +46,15 @@ describe("instance configuration", () => {
         items: ["declared"],
       },
       setup({ config, tui }) {
-        config.nested = {
-          ...(config.nested as Record<string, boolean | string>),
-          winner: "setup",
-        }
-        tui.items = ["setup"]
+        return Effect.sync(() => {
+          config.nested = {
+            ...(config.nested as Record<string, boolean | string>),
+            winner: "setup",
+          }
+          tui.items = ["setup"]
+        })
       },
-    })
+    }))
 
     const files = join(root, "files")
     const configText = await Bun.file(
@@ -77,12 +80,12 @@ describe("instance configuration", () => {
     const root = await initializeInstance()
     artifacts.push(root)
     await expect(
-      prepareInstanceProject({
+      Effect.runPromise(prepareInstanceProject({
         artifacts: root,
         project: {
           files: { ".opencode/tui.jsonc": "{ invalid" },
         },
-      }),
+      })),
     ).rejects.toThrow("invalid .opencode/tui.jsonc")
   })
 
@@ -92,25 +95,53 @@ describe("instance configuration", () => {
     const config = { nested: { value: "declared" }, items: ["declared"] }
     const tui = { keybinds: { app_exit: "ctrl+q" } }
 
-    await prepareInstanceProject({
+    await Effect.runPromise(prepareInstanceProject({
       artifacts: root,
       config,
       tui,
       setup({ config, tui }) {
-        const nested = config.nested as Record<string, string>
-        const items = config.items as Array<string>
-        const keybinds = tui.keybinds as Record<string, string>
-        nested.value = "setup"
-        items.push("setup")
-        keybinds.app_exit = "ctrl+x"
+        return Effect.sync(() => {
+          const nested = config.nested as Record<string, string>
+          const items = config.items as Array<string>
+          const keybinds = tui.keybinds as Record<string, string>
+          nested.value = "setup"
+          items.push("setup")
+          keybinds.app_exit = "ctrl+x"
+        })
       },
-    })
+    }))
 
     expect(config).toEqual({
       nested: { value: "declared" },
       items: ["declared"],
     })
     expect(tui).toEqual({ keybinds: { app_exit: "ctrl+q" } })
+  })
+
+  test("interrupts setup with project preparation", async () => {
+    const root = await initializeInstance()
+    artifacts.push(root)
+    const started = Promise.withResolvers<void>()
+    let finalized = false
+    const controller = new AbortController()
+    const prepared = Effect.runPromise(
+      prepareInstanceProject({
+        artifacts: root,
+        setup: () =>
+          Effect.sync(() => started.resolve()).pipe(
+            Effect.andThen(Effect.never),
+            Effect.ensuring(Effect.sync(() => {
+              finalized = true
+            })),
+          ),
+      }),
+      { signal: controller.signal },
+    )
+
+    await started.promise
+    controller.abort()
+    await expect(prepared).rejects.toThrow()
+    expect(finalized).toBe(true)
   })
 })
 

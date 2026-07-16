@@ -1,14 +1,15 @@
 import { defineScript } from "opencode-drive"
+import * as Effect from "effect/Effect"
+import * as Exit from "effect/Exit"
 
 export default defineScript({
-  async run({ ui }) {
-    await ui.kill()
-    let closed = false
-    try {
-      await ui.state()
-    } catch {
-      closed = true
-    }
-    if (!closed) throw new Error("primary client remained connected after ui.kill()")
-  },
+  run: ({ ui }) =>
+    Effect.gen(function* () {
+      yield* Effect.exit(ui.kill())
+      const closed = Exit.isFailure(yield* Effect.exit(ui.state()))
+      if (!closed)
+        yield* Effect.fail(
+          new Error("primary client remained connected after ui.kill()"),
+        )
+    }),
 })

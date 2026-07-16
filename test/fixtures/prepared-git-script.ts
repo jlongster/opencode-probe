@@ -1,24 +1,35 @@
 import { join } from "node:path"
 import { defineScript } from "../../src/index.js"
+import * as Effect from "effect/Effect"
 
 let setupGitError: string | undefined
 
 export default defineScript({
   launch: "manual",
-  async setup({ fs }) {
-    setupGitError = await fs
-      .writeFile(".GIT/config", "setup must not replace Git metadata\n")
-      .then(() => undefined)
-      .catch((error: unknown) => String(error))
-  },
-  async run({ artifacts, fs }) {
-    const runGitError = await fs
-      .writeFile(".GIT/config", "run must not replace Git metadata\n")
-      .then(() => undefined)
-      .catch((error: unknown) => String(error))
-    await Bun.write(
-      join(artifacts, "prepared-git-result.json"),
-      `${JSON.stringify({ runGitError, setupGitError }, undefined, 2)}\n`,
-    )
-  },
+  setup: ({ fs }) =>
+    Effect.gen(function* () {
+      setupGitError = yield* Effect.matchEffect(
+        fs.writeFile(".GIT/config", "setup must not replace Git metadata\n"),
+        {
+          onFailure: (error) => Effect.succeed(String(error)),
+          onSuccess: () => Effect.succeed(undefined),
+        },
+      )
+    }),
+  run: ({ artifacts, fs }) =>
+    Effect.gen(function* () {
+      const runGitError = yield* Effect.matchEffect(
+        fs.writeFile(".GIT/config", "run must not replace Git metadata\n"),
+        {
+          onFailure: (error) => Effect.succeed(String(error)),
+          onSuccess: () => Effect.succeed(undefined),
+        },
+      )
+      yield* Effect.tryPromise(() =>
+        Bun.write(
+          join(artifacts, "prepared-git-result.json"),
+          `${JSON.stringify({ runGitError, setupGitError }, undefined, 2)}\n`,
+        ),
+      )
+    }),
 })

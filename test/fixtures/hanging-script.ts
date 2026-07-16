@@ -1,9 +1,8 @@
 import { defineScript } from "../../src/index.js"
+import * as Effect from "effect/Effect"
 
 export default defineScript({
-  async run({ signal }) {
-    await new Promise<void>((resolve) => {
-      signal.addEventListener("abort", () => resolve(), { once: true })
-    })
-  },
+  run: () => Effect.gen(function* () {
+    yield* Effect.never
+  }),
 })

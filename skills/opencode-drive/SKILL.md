@@ -7,7 +7,10 @@ description: Use when an agent needs to drive OpenCode with an Effect program or
 
 Use `opencode-drive` to launch an isolated OpenCode instance and control its TUI and simulated LLM.
 
-Default to a one-shot Effect program. Use live commands only for interactive development against a persistent or visible instance. Use the Promise script adapter only for named, visible, restartable, or manual-launch compatibility workflows.
+Default to a one-shot Effect program. Use `defineScript` for named, visible,
+restartable, or manual-launch workflows; it is also Effect-only. Use live
+commands only for interactive development against a persistent or visible
+instance.
 
 ## Effect Programs
 
@@ -65,11 +68,12 @@ export default OpenCodeDriver.use(
       theme: "system",
       scroll_speed: 1,
     },
-    async setup({ fs, config, tui }) {
-      await fs.writeFile("src/setup.ts", "export const ready = true\n")
-      config.username = "Setup wins"
-      tui.scroll_speed = 2
-    },
+    setup: ({ fs, config, tui }) =>
+      Effect.gen(function* () {
+        yield* fs.writeFile("src/setup.ts", "export const ready = true\n")
+        config.username = "Setup wins"
+        tui.scroll_speed = 2
+      }),
   },
   ({ ui }) => ui.screenshot("home"),
 )
@@ -105,7 +109,20 @@ yield* llm.queue(
 )
 ```
 
-`llm.queue(...)` declares the next response without waiting. `llm.send(...)` waits for the next request and completes its response. `llm.serve(handler)` handles an ongoing sequence of requests. Available outputs include `text`, `reasoning`, `pause`, `toolCall`, `raw`, `finish`, and `disconnect`; a normal response gets `finish("stop")` when no terminal output is supplied.
+`llm.queue(...)` declares the next response without waiting. `llm.send(...)`
+waits for the next request and completes its response. For ongoing responses,
+the handler passed to `llm.serve` returns an Effect `Stream`; registering the
+handler is an Effect. Available outputs include `text`, `reasoning`, `pause`,
+`toolCall`, `raw`, `finish`, and `disconnect`; a normal response gets
+`finish("stop")` when no terminal output is supplied.
+
+```ts
+import { Stream } from "effect"
+
+yield* llm.serve((_request, index) =>
+  Stream.make(llm.text(`Response ${index + 1}`)),
+)
+```
 
 Additional clients share the server and LLM controller:
 
@@ -128,8 +145,11 @@ Drive prefers protocol negotiation and reports explicit legacy fallback. Set `op
 ### Simulated Shell Execution
 
 Use `tools` to replace shell execution without changing the model-visible tool
-schema. The handler receives typed input, a zero-based call index, an abort
-signal, and an Effect progress function. Unregistered tools remain real.
+schema. The handler receives typed input, a zero-based call index, and an Effect
+progress function. It also receives an `AbortSignal` from the OpenCode tool
+transport; handler Effects are interrupted when that signal aborts. This
+transport signal is separate from script lifecycle cancellation, which uses
+Effect interruption. Unregistered tools remain real.
 
 ```ts
 import { Effect } from "effect"
@@ -154,11 +174,16 @@ The same `tools` callback is accepted by `defineScript`. Supported adapters are
 Each progress value replaces the visible tool output, so send accumulated text
 when earlier lines should remain visible.
 
-## Promise Compatibility Scripts
+## Effect Scripts
 
-Retain `defineScript` with `start --script` when the workflow must have a stable instance name, be visible, rerun on `restart`, or explicitly launch and kill its server and clients. Do not choose this adapter for an ordinary one-shot automation.
+Use `defineScript` with `start --script` when the workflow must have a stable
+instance name, be visible, rerun on `restart`, or explicitly launch and kill
+its server and clients. `setup` and `run` return Effects. Operations on `fs`,
+`ui`, `llm`, `server`, and `clients` also return Effects; there is no
+Promise API or compatibility shim.
 
 ```ts
+import { Effect } from "effect"
 import { defineScript } from "opencode-drive"
 
 export default defineScript({
@@ -168,40 +193,46 @@ export default defineScript({
     git: true,
     files: { "src/value.ts": "export const value = 1\n" },
   },
-  async run({ ui, llm }) {
-    llm.queue(llm.text("The value is 1."))
-    await ui.submit("Read src/value.ts")
-    await ui.waitFor("The value is 1.")
-  },
+  run: ({ ui, llm }) =>
+    Effect.gen(function* () {
+      yield* llm.queue(llm.text("The value is 1."))
+      yield* ui.submit("Read src/value.ts")
+      yield* ui.waitFor("The value is 1.")
+    }),
 })
 ```
 
-Always type-check a Promise script before starting it:
+Always type-check a script before starting it:
 
 ```bash
 opencode-drive check ./drive.ts
 opencode-drive start --name demo --script ./drive.ts
 ```
 
-The Promise DSL applies `project`, `config`, `tui`, and `setup` with the same deterministic ordering described above. Automatic scripts run again after `opencode-drive restart --name demo`.
+The script DSL applies `project`, `config`, `tui`, and `setup` with the same deterministic ordering described above. Automatic scripts run again after `opencode-drive restart --name demo`.
 
-Use `launch: "manual"` only when the compatibility workflow must control server and client restarts itself. In manual mode `ui` is `null`; call `server.launch()` before `clients.launch(name)`. Only one server may run at a time, `server.kill()` permits relaunch, and a killed client name may be reused.
+Use `launch: "manual"` only when the workflow must control server and client restarts itself. In manual mode `ui` is `null`; run `server.launch()` before `clients.launch(name)`. Only one server may run at a time, `server.kill()` permits relaunch, and a killed client name may be reused.
 
 ```ts
 export default defineScript({
   launch: "manual",
-  async run({ server, clients }) {
-    await server.launch()
-    const alice = await clients.launch("alice", { record: true })
-    await alice.screenshot("alice")
-    await alice.kill()
-  },
+  run: ({ server, clients }) =>
+    Effect.gen(function* () {
+      yield* server.launch()
+      const alice = yield* clients.launch("alice", { record: true })
+      yield* alice.screenshot("alice")
+      yield* alice.kill()
+    }),
 })
 ```
 
+Cancellation uses Effect interruption. Interrupting the script or an
+operation's fiber interrupts in-flight work and runs scoped finalizers; do not
+introduce `AbortSignal` or Promise cancellation wrappers.
+
 ## Prepare An Instance
 
-Use `init` only when files must be copied into an isolated home or project before a named live or Promise-script instance starts:
+Use `init` only when files must be copied into an isolated home or project before a named live or scripted instance starts:
 
 ```bash
 artifacts=$(opencode-drive init --name demo)

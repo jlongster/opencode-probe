@@ -1,3 +1,4 @@
+import * as Effect from "effect/Effect"
 import type {
   AutomaticScriptDefinition,
   ManualScriptDefinition,
@@ -12,8 +13,6 @@ export function defineScript(script: ScriptDefinition): ScriptDefinition {
   return script
 }
 
-export function wait(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds))
-}
+export const wait = (milliseconds: number) => Effect.sleep(milliseconds)
 
 export type * from "./types.js"

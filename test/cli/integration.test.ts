@@ -761,7 +761,7 @@ describe("opencode-drive", () => {
     await mkdir(directory, { recursive: true })
     await Bun.write(
       join(directory, "valid.ts"),
-      'import { defineScript, wait } from "opencode-drive"\nexport default defineScript({ project: { git: true, files: { "src/index.ts": "export {}\\n" } }, async run() { await wait(1) } })\n',
+      'import { defineScript, wait } from "opencode-drive"\nexport default defineScript({ project: { git: true, files: { "src/index.ts": "export {}\\n" } }, run: () => wait(1) })\n',
     )
     const checked = spawn(["check", join(directory, "valid.ts")], root)
     expect(await checked.exited).toBe(0)
@@ -772,9 +772,7 @@ describe("opencode-drive", () => {
     await Bun.write(join(directory, "invalid.ts"), 'import { wait } from "opencode-drive"\nwait("wrong")\n')
     const invalid = spawn(["check", join(directory, "invalid.ts")], root)
     expect(await invalid.exited).toBe(1)
-    expect(await new Response(invalid.stdout).text()).toContain(
-      "Argument of type 'string' is not assignable to parameter of type 'number'",
-    )
+    expect(await new Response(invalid.stdout).text()).toContain("is not assignable to parameter of type")
   }, 60_000)
 
   test("launches all clients explicitly for a manual UI script", async () => {
@@ -868,6 +866,57 @@ describe("opencode-drive", () => {
     expect(await new Response(child.stderr).text()).toContain(
       "script must default-export defineScript({ project?, setup?, run })",
     )
+  })
+
+  test.each(["setup", "run"] as const)("rejects a Promise-returning script %s callback", async (callback) => {
+    const root = await temporary()
+    const script = join(root, `promise-${callback}-script.js`)
+    const drive = JSON.stringify(resolve("src/index.ts"))
+    await Bun.write(
+      script,
+      callback === "setup"
+        ? `import { Effect } from "effect"\nimport { defineScript } from ${drive}\nexport default defineScript({ setup: async () => {}, run: () => Effect.void })\n`
+        : `import { defineScript } from ${drive}\nexport default defineScript({ run: async () => {} })\n`,
+    )
+    const child = spawn(
+      [
+        "start",
+        "--name",
+        `promise-${callback}-script-test`,
+        "--script",
+        script,
+        "--",
+        process.execPath,
+        fixture("fake-opencode.ts"),
+      ],
+      root,
+    )
+    expect(await child.exited).toBe(1)
+    expect(await new Response(child.stderr).text()).toContain(`script ${callback} must return an Effect`)
+  })
+
+  test("rejects a Promise-returning UI predicate", async () => {
+    const root = await temporary()
+    const script = join(root, "promise-predicate-script.js")
+    await Bun.write(
+      script,
+      `import { defineScript } from ${JSON.stringify(resolve("src/index.ts"))}\nexport default defineScript({ run: ({ ui }) => ui.waitFor(() => Promise.resolve(false)) })\n`,
+    )
+    const child = spawn(
+      [
+        "start",
+        "--name",
+        "promise-predicate-script-test",
+        "--script",
+        script,
+        "--",
+        process.execPath,
+        fixture("fake-opencode.ts"),
+      ],
+      root,
+    )
+    expect(await child.exited).toBe(1)
+    expect(await new Response(child.stderr).text()).toContain("ui.waitFor predicate must return a boolean or Effect")
   })
 
   test("stops a visible instance after a script completes", async () => {
@@ -1047,7 +1096,7 @@ describe("opencode-drive", () => {
     const marker = join(root, "script-interrupted")
     await Bun.write(
       script,
-      `import { defineScript } from ${JSON.stringify(resolve("src/index.ts"))}\nexport default defineScript({ async run({ signal, artifacts }) { await new Promise<void>((resolve) => signal.addEventListener("abort", () => { void (async () => { const pid = Number(await Bun.file(artifacts + "/child.pid").text()); let running = true; try { process.kill(pid, 0) } catch { running = false }; await Bun.write(${JSON.stringify(marker)}, running ? "child-running\\n" : "child-stopped\\n"); resolve() })() }, { once: true })) } })\n`,
+      `import { Effect } from "effect"\nimport { defineScript } from ${JSON.stringify(resolve("src/index.ts"))}\nexport default defineScript({ run: ({ artifacts }) => Effect.never.pipe(Effect.ensuring(Effect.promise(async () => { const pid = Number(await Bun.file(artifacts + "/child.pid").text()); let running = true; try { process.kill(pid, 0) } catch { running = false }; await Bun.write(${JSON.stringify(marker)}, running ? "child-running\\n" : "child-stopped\\n") }))) })\n`,
     )
     const child = spawn(
       [

@@ -154,8 +154,8 @@ export default Effect.scoped(
 )
 ```
 
-Use `opencode-drive check ./legacy-script.ts` and `start --script` for the
-Promise `defineScript` adapter described below.
+Use `opencode-drive check ./drive.ts` and `start --script` for the Effect-native
+`defineScript` workflow described below.
 
 ## OpenCode development
 
@@ -213,11 +213,13 @@ While developing, you can run `opencode-drive restart` to restart only the UI (t
 
 View the [skills file](https://github.com/anomalyco/opencode-drive/blob/main/skills/opencode-drive/SKILL.md) for more details about the CLI.
 
-## Promise script API
+## Effect script API
 
-Scripted runs use one fully typed definition:
+Scripted runs use one fully typed, Effect-only definition. `setup` and `run`
+return Effects; Promise callbacks are not part of the API:
 
 ```ts
+import { Effect } from "effect"
 import { defineScript } from "opencode-drive"
 
 export default defineScript({
@@ -233,15 +235,17 @@ export default defineScript({
       "src/example.ts": "export const value = 1\n",
     },
   },
-  setup({ config, tui }) {
-    config.username = "Drive"
-    tui.scroll_speed = 1
-  },
-  async run({ ui, llm }) {
-    await ui.submit("Read src/example.ts")
-    await llm.send(llm.text("The value is 1."))
-    await ui.waitFor("The value is 1.")
-  },
+  setup: ({ config, tui }) =>
+    Effect.sync(() => {
+      config.username = "Drive"
+      tui.scroll_speed = 1
+    }),
+  run: ({ ui, llm }) =>
+    Effect.gen(function* () {
+      yield* ui.submit("Read src/example.ts")
+      yield* llm.send(llm.text("The value is 1."))
+      yield* ui.waitFor("The value is 1.")
+    }),
 })
 ```
 
@@ -272,20 +276,25 @@ export default defineScript({
       }),
     )
   },
-  async run({ ui, llm }) {
-    llm.queue(
-      llm.toolCall({
-        index: 0,
-        id: "call_shell",
-        name: "shell",
-        input: { command: "deploy production" },
-      }),
-      llm.finish("tool-calls"),
-    )
-    await ui.submit("Deploy production")
-  },
+  run: ({ ui, llm }) =>
+    Effect.gen(function* () {
+      yield* llm.queue(
+        llm.toolCall({
+          index: 0,
+          id: "call_shell",
+          name: "shell",
+          input: { command: "deploy production" },
+        }),
+        llm.finish("tool-calls"),
+      )
+      yield* ui.submit("Deploy production")
+    }),
 })
 ```
+
+Tool handlers also receive the OpenCode transport's `AbortSignal`; their
+Effects are interrupted when it aborts. Script lifecycle cancellation itself
+uses Effect interruption and does not expose a separate signal.
 
 Only registered tools are replaced. Unhandled tools continue to use OpenCode's
 real implementations. Each `progress` value replaces the visible tool output;
@@ -307,37 +316,42 @@ Drive temporarily exposes its script API and `tsgo` beside the script while
 checking, then removes only the links it created. `wait(milliseconds)` is
 available for unconditional delays.
 
-Set `launch: "manual"` to launch the shared OpenCode server and every TUI
-explicitly:
+The `fs`, `ui`, `llm`, `server`, and `clients` capabilities expose
+Effect-returning operations. Compose them with `yield*`, `Effect.flatMap`, or
+other Effect operators. Predicates passed to `ui.waitFor` may return a boolean
+or an Effect. Set `launch: "manual"` to launch the shared OpenCode server and
+every TUI explicitly:
 
 ```ts
+import { Effect } from "effect"
 import { defineScript } from "opencode-drive"
 
 export default defineScript({
   launch: "manual",
-  async run({ ui, server, clients }) {
-    // ui is null in manual mode.
-    await server.launch()
-    const alice = await clients.launch("alice")
-    const bob = await clients.launch("bob")
-    await alice.submit("Hello from Alice")
-    await bob.screenshot("bob-view")
-  },
+  run: ({ ui, server, clients }) =>
+    Effect.gen(function* () {
+      // ui is null in manual mode.
+      yield* server.launch()
+      const alice = yield* clients.launch("alice")
+      const bob = yield* clients.launch("bob")
+      yield* alice.submit("Hello from Alice")
+      yield* bob.screenshot("bob-view")
+    }),
 })
 ```
 
 Only one server may be launched per script. All clients share its LLM backend. Client processes and temporary
 script links are cleaned up when the script ends.
 
-`await server.kill()` stops the server so it can be launched again later.
-Every client handle also has `await ui.kill()` and its name may be reused after
-the TUI exits.
+`yield* server.kill()` stops the server so it can be launched again later.
+Every client handle also has `yield* ui.kill()`, and its name may be reused
+after the TUI exits.
 
 Pass `{ record: true }` to record an individual client:
 
 ```ts
-const ui = await clients.launch("alice", { record: true })
-const video = await ui.kill()
+const ui = yield* clients.launch("alice", { record: true })
+const video = yield* ui.kill()
 ```
 
 `ui.kill()` exports the recording before terminating the TUI. Clients still
@@ -348,16 +362,29 @@ consume `llm.queue`, `llm.send`, or `llm.serve` responses. Manual-launch
 scripts can customize them before starting the server:
 
 ```ts
-llm.title((request) => "Custom title")
-await server.launch()
+yield* llm.title(() => Effect.succeed("Custom title"))
+yield* server.launch()
 ```
 
-Use `await llm.send(...)` to wait for and complete the next request,
-`llm.queue(...)` to declare future responses upfront, or `llm.serve(async
-function* () { ... })` for ongoing streamed responses. The backend connection,
-default `finish("stop")`, cancellation, and cleanup are automatic. All public
-script types are canonically defined in [`src/script/types.ts`](./src/script/types.ts),
-which can be provided directly to an authoring agent.
+Use `yield* llm.send(...)` to wait for and complete the next request or `yield*
+llm.queue(...)` to declare future responses upfront. For ongoing responses,
+the handler passed to `llm.serve` returns an Effect `Stream`:
+
+```ts
+import { Stream } from "effect"
+
+yield* llm.serve((_request, index) =>
+  Stream.make(llm.text(`Response ${index + 1}`)),
+)
+```
+
+The backend connection, default `finish("stop")`, and cleanup are automatic.
+Cancellation is represented by Effect interruption: interrupting the script or
+the fiber running an operation interrupts its in-flight work and runs scoped
+finalizers. There is no Promise compatibility shim or separate cancellation
+API. All public script types are canonically defined in
+[`src/script/types.ts`](./src/script/types.ts), which can be provided directly
+to an authoring agent.
 
 `llm.text()` streams text in randomized chunks. It defaults to a 2 ms delay and
 a target chunk size of 15 characters, varied by plus or minus 5 per chunk:

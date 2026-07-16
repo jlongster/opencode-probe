@@ -1,6 +1,7 @@
 import { mkdir } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
+import * as Effect from "effect/Effect"
 import { createScriptFileSystem } from "../script/filesystem.js"
 import {
   commitScriptProject,
@@ -52,7 +53,7 @@ export async function initializeInstance(name?: string) {
   return artifacts
 }
 
-export async function prepareInstanceProject(options: {
+export const prepareInstanceProject = Effect.fn("OpenCodeInstance.prepareProject")(function* (options: {
   readonly artifacts: string
   readonly project?: ScriptProject
   readonly config?: OpenCodeConfig
@@ -62,28 +63,40 @@ export async function prepareInstanceProject(options: {
   const files = join(resolve(options.artifacts), "files")
   const configPath = join(files, ".opencode", "opencode.jsonc")
   const tuiPath = join(files, ".opencode", "tui.jsonc")
-  if (options.project) await initializeScriptProject(files, options.project)
-  const [config, tui] = await Promise.all([
-    readConfig(configPath, "opencode.jsonc"),
-    readConfig(tuiPath, "tui.jsonc", {}),
-  ])
+  const project = options.project
+  if (project)
+    yield* promise(() => initializeScriptProject(files, project))
+  const [config, tui] = yield* Effect.all([
+    promise(() => readConfig(configPath, "opencode.jsonc")),
+    promise(() => readConfig(tuiPath, "tui.jsonc", {})),
+  ], { concurrency: "unbounded" })
   deepMerge(config, options.config)
   deepMerge(tui, options.tui)
   if (options.setup !== undefined) {
     const protectGit =
-      Boolean(options.project?.git) || (await hasGitMetadata(files))
-    await options.setup({
+      Boolean(options.project?.git) || (yield* promise(() => hasGitMetadata(files)))
+    const setup: unknown = options.setup({
       fs: createScriptFileSystem(files, { git: protectGit }),
       config,
       tui,
     })
+    if (!Effect.isEffect(setup))
+      return yield* Effect.fail(new Error("script setup must return an Effect"))
+    yield* setup
   }
-  await Promise.all([
-    Bun.write(configPath, `${JSON.stringify(config, undefined, 2)}\n`),
-    Bun.write(tuiPath, `${JSON.stringify(tui, undefined, 2)}\n`),
-  ])
-  if (options.project?.git) await commitScriptProject(files)
-}
+  yield* Effect.all([
+    promise(() => Bun.write(configPath, `${JSON.stringify(config, undefined, 2)}\n`)),
+    promise(() => Bun.write(tuiPath, `${JSON.stringify(tui, undefined, 2)}\n`)),
+  ], { concurrency: "unbounded" })
+  if (options.project?.git)
+    yield* promise(() => commitScriptProject(files))
+})
+
+const promise = <A>(evaluate: () => PromiseLike<A>) =>
+  Effect.tryPromise({
+    try: evaluate,
+    catch: (cause) => cause instanceof Error ? cause : new Error(String(cause)),
+  })
 
 async function readConfig(
   path: string,
