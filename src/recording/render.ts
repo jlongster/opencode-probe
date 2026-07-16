@@ -61,12 +61,20 @@ function baselineOffset(context: Measurable, font: string) {
   return offset
 }
 
-function drawBlockElement(context: SKRSContext2D, char: string, x: number, y: number) {
+function drawFixedGlyph(context: SKRSContext2D, char: string, x: number, y: number) {
   if (char === "█") context.fillRect(x, y, CellWidth, CellHeight)
   else if (char === "▀") context.fillRect(x, y, CellWidth, CellHeight / 2)
   else if (char === "▄") context.fillRect(x, y + CellHeight / 2, CellWidth, CellHeight / 2)
   else if (char === "■") context.fillRect(x + 1, y + 6, 8, 8)
   else if (char === "⬝") context.fillRect(x + 4, y + 9, 2, 2)
+  else if (char === "↳") {
+    context.fillRect(x + 1, y + 4, 1, 10)
+    context.fillRect(x + 1, y + 13, 8, 1)
+    context.fillRect(x + 6, y + 11, 1, 1)
+    context.fillRect(x + 7, y + 12, 1, 1)
+    context.fillRect(x + 7, y + 14, 1, 1)
+    context.fillRect(x + 6, y + 15, 1, 1)
+  }
   else return false
   return true
 }
@@ -121,7 +129,7 @@ export function renderFrame(frame: CapturedFrame, options: RenderFrameOptions = 
       for (const char of span.text) {
         const cells = Math.min(Math.max(1, Bun.stringWidth(char)), remaining)
         const x = column * CellWidth
-        if (!drawBlockElement(context, char, x, y))
+        if (!drawFixedGlyph(context, char, x, y))
           context.fillText(
             char,
             x + (cells * CellWidth) / 2,

@@ -204,6 +204,29 @@ test("renders distinct fallback glyphs centered in their cells", async () => {
   expect(new Set(masks).size).toBe(symbols.length)
 })
 
+test("renders the background completion arrow at fixed cell coordinates", async () => {
+  const image = await loadImage(
+    renderFrame({
+      cols: 1,
+      rows: 1,
+      cursor: { row: 0, col: 0, visible: false },
+      lines: [{ spans: [{ text: "↳", width: 1, fg: 0x12abef, bg: 0x010203, attributes: 0 }] }],
+    }),
+  )
+  const canvas = createCanvas(10, 20)
+  const context = canvas.getContext("2d")
+  context.drawImage(image, 0, 0)
+  const pixels = context.getImageData(0, 0, 10, 20).data
+  const ink = Array.from({ length: 200 }, (_, index) => index).filter((index) => {
+    const offset = index * 4
+    return pixels[offset] === 0x12 && pixels[offset + 1] === 0xab && pixels[offset + 2] === 0xef
+  })
+
+  expect(ink).toEqual([
+    41, 51, 61, 71, 81, 91, 101, 111, 116, 121, 127, 131, 132, 133, 134, 135, 136, 137, 138, 147, 156,
+  ])
+})
+
 test("renders the Kit loader block and dots at fixed cell sizes", async () => {
   const glyphs = [..."■⬝"]
   const image = await loadImage(
