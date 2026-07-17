@@ -61,6 +61,10 @@ In the catalog:
 - Use the capture-set picker or press up/down to compare revisions and themes without losing the current screen.
 - In the viewer, press left/right to move through flow steps and up/down to switch capture sets.
 - Use **Copy ID** to copy the active flow state address, or the capture ID when browsing screens directly.
+- Open captures have stable `screen`, `flow`, and `set` URL parameters for sharing an exact catalog state.
+- Right-click any terminal image to copy its canonical ID or deep link.
+- Click a card to open its full-screen viewer and press `Escape` to close it.
+- Press `Cmd+K` or `Ctrl+K` to search screens, labels, UI elements, and flows.
 
 Reproduce a registered executable state against an OpenCode checkout:
 
@@ -70,10 +74,6 @@ bun run reproduce -- patch-success-lifecycle/permission-prompt \
 ```
 
 The command prints the path to a normalized terminal frame. Only states from flows registered in `scenarios/index.ts` are currently reproducible; other catalog flows remain browse-only until their recipes are migrated.
-- Click a card to open its full-screen viewer.
-- Press up or down in the viewer to move between screens.
-- Press `Escape` to close the viewer.
-- Press `Cmd+K` or `Ctrl+K` to search screens, labels, UI elements, and flows.
 
 ## Compare Branches
 
