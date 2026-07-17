@@ -300,9 +300,11 @@ export default defineScript({
 })
 ```
 
-Tool handlers also receive the OpenCode transport's `AbortSignal`; their
-Effects are interrupted when it aborts. Script lifecycle cancellation itself
-uses Effect interruption and does not expose a separate signal.
+Foreground tool handler Effects are interrupted when OpenCode interrupts the
+session, the transport disconnects, or Drive shuts down. Use Effect finalizers
+such as `Effect.onInterrupt` or `Effect.ensuring` for cancellation cleanup.
+Detached background shell handlers continue after their launch response and
+are interrupted when Drive shuts down.
 
 Only registered tools are replaced. Unhandled tools continue to use OpenCode's
 real implementations. Each `progress` value replaces the visible tool output;

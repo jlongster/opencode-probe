@@ -42,7 +42,6 @@ type Definition = {
   readonly invoke: (
     input: unknown,
     index: number,
-    signal: AbortSignal,
     progress: (result: Result) => Effect.Effect<void>,
   ) => Effect.Effect<Result, unknown>
 }
@@ -97,13 +96,12 @@ export const make = Effect.fn("ToolController.make")(function* (setup?: Setup) {
           const handler = registration[1]
           add("shell", {
             schema: ShellInput,
-            invoke: (raw, index, signal, progress) =>
+            invoke: (raw, index, progress) =>
               Effect.gen(function* () {
                 const input = yield* Schema.decodeUnknownEffect(ShellInput)(raw)
                 const result = yield* handler({
                   input,
                   index,
-                  signal,
                   progress: (value) => progress(typeof value === "string" ? { output: value } : value),
                 })
                 return yield* Schema.decodeUnknownEffect(ShellResult)(result)
@@ -115,13 +113,12 @@ export const make = Effect.fn("ToolController.make")(function* (setup?: Setup) {
           const handler = registration[1]
           add("webfetch", {
             schema: WebFetchInput,
-            invoke: (raw, index, signal, progress) =>
+            invoke: (raw, index, progress) =>
               Effect.gen(function* () {
                 const input = yield* Schema.decodeUnknownEffect(WebFetchInput)(raw)
                 const result = yield* handler({
                   input,
                   index,
-                  signal,
                   progress: (value) => progress(typeof value === "string" ? { output: value } : value),
                 })
                 return yield* Schema.decodeUnknownEffect(WebFetchResult)(result)
@@ -133,13 +130,12 @@ export const make = Effect.fn("ToolController.make")(function* (setup?: Setup) {
           const handler = registration[1]
           add("websearch", {
             schema: WebSearchInput,
-            invoke: (raw, index, signal, progress) =>
+            invoke: (raw, index, progress) =>
               Effect.gen(function* () {
                 const input = yield* Schema.decodeUnknownEffect(WebSearchInput)(raw)
                 const result = yield* handler({
                   input,
                   index,
-                  signal,
                   progress: (value) => progress(typeof value === "string" ? { output: value } : value),
                 })
                 return yield* Schema.decodeUnknownEffect(WebSearchResult)(result)
@@ -154,7 +150,7 @@ export const make = Effect.fn("ToolController.make")(function* (setup?: Setup) {
 
   const token = crypto.randomUUID()
   const indexes = new Map<string, number>()
-  const active = new Set<AbortController>()
+  const active = new Map<AbortController, Promise<unknown>>()
   const background = new Map<string, BackgroundJob>()
   let closing = false
   const server = yield* Effect.acquireRelease(
@@ -194,10 +190,10 @@ export const make = Effect.fn("ToolController.make")(function* (setup?: Setup) {
       Effect.gen(function* () {
         closing = true
         yield* Effect.sync(() => {
-          for (const controller of active)
+          for (const controller of active.keys())
             controller.abort(new Error("Drive tool controller stopped"))
         })
-        yield* Effect.promise(() => Promise.allSettled([...background.values()].map((job) => job.completion)))
+        yield* Effect.promise(() => Promise.allSettled(active.values()))
         background.clear()
         yield* Effect.promise(() => server.stop(true))
       }),
@@ -232,14 +228,13 @@ function execute(
   name: string,
   definition: Definition,
   indexes: Map<string, number>,
-  active: Set<AbortController>,
+  active: Map<AbortController, Promise<unknown>>,
   background: Map<string, BackgroundJob>,
 ) {
   const transport = new TransformStream<Uint8Array, Uint8Array>()
   const writer = transport.writable.getWriter()
   const controller = new AbortController()
   const signal = AbortSignal.any([request.signal, controller.signal])
-  active.add(controller)
   const send = (event: Event) =>
     Effect.suspend(() => {
       const frame = encodeEvent(event)
@@ -274,12 +269,14 @@ function execute(
       }
     }
     const index = nextIndex(indexes, name)
-    return yield* definition.invoke(input, index, signal, (value) => send({ type: "progress", result: value }))
+    return yield* definition.invoke(input, index, (value) => send({ type: "progress", result: value }))
   })
   void writer.closed.catch((cause) => controller.abort(cause))
-  void (async () => {
+  const completion = (async () => {
     try {
-      const exit = await Effect.runPromise(Effect.exit(result), { signal })
+      const exit = await Effect.runPromiseExit(result, { signal })
+      if (signal.aborted)
+        throw signal.reason ?? new Error("Drive tool execution interrupted")
       if (Exit.isSuccess(exit))
         await Effect.runPromise(send({ type: "success", result: exit.value }), { signal })
       else {
@@ -292,13 +289,14 @@ function execute(
         )
       }
       await writer.close()
-    } catch (cause) {
+    } catch {
       if (launched !== undefined) launched.cancel()
-      await writer.abort(cause).catch(() => undefined)
+      await writer.abort().catch(() => undefined)
     } finally {
       active.delete(controller)
     }
   })()
+  active.set(controller, completion)
   return new Response(transport.readable, {
     headers: { "content-type": "application/x-ndjson" },
   })
@@ -315,17 +313,16 @@ function startBackgroundShell(
   index: number,
   shellID: string,
   inputKey: string,
-  active: Set<AbortController>,
+  active: Map<AbortController, Promise<unknown>>,
 ): BackgroundJob {
   const controller = new AbortController()
-  active.add(controller)
   let output = ""
-  const result = definition.invoke(input, index, controller.signal, (value) =>
+  const result = definition.invoke(input, index, (value) =>
     Effect.sync(() => {
       encodeEvent({ type: "progress", result: value })
       output = value.output
     }))
-  const completion = Effect.runPromise(Effect.exit(result), { signal: controller.signal })
+  const completion = Effect.runPromiseExit(result, { signal: controller.signal })
     .then((exit): BackgroundCompletion => {
       if (Exit.isSuccess(exit)) {
         encodeEvent({ type: "success", result: exit.value })
@@ -348,6 +345,7 @@ function startBackgroundShell(
       output: errorOutput(output, cause instanceof Error ? cause.message : String(cause)),
     }))
     .finally(() => active.delete(controller))
+  active.set(controller, completion)
   return {
     input: inputKey,
     completion,

@@ -69,7 +69,6 @@ export interface Context<Input, Result> {
   readonly input: Input
   /** Zero-based invocation index for this handler. */
   readonly index: number
-  readonly signal: AbortSignal
   readonly progress: (output: string | Result) => Effect.Effect<void>
 }
 

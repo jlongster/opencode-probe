@@ -1,6 +1,7 @@
 import { expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 import * as Exit from "effect/Exit"
+import * as Fiber from "effect/Fiber"
 import * as Scope from "effect/Scope"
 import * as ToolController from "../../src/tool/controller.js"
 import { Failure } from "../../src/tool/index.js"
@@ -134,15 +135,16 @@ it.effect("settles background shells immediately and retains their completion", 
   Effect.scoped(
     Effect.gen(function* () {
       const release = Promise.withResolvers<void>()
-      let aborted = false
+      let interrupted = false
       const controller = yield* ToolController.make((tools) => {
-        tools.handle("shell", ({ input, signal, progress }) =>
+        tools.handle("shell", ({ input, progress }) =>
           Effect.gen(function* () {
-            signal.addEventListener("abort", () => (aborted = true), { once: true })
             yield* progress("still running\n")
             yield* Effect.promise(() => release.promise)
             return { output: `${input.command} complete\n`, exit: 0 }
-          }),
+          }).pipe(
+            Effect.onInterrupt(() => Effect.sync(() => (interrupted = true))),
+          ),
         )
       })
       const config: OpenCodeConfig = {}
@@ -175,7 +177,7 @@ it.effect("settles background shells immediately and retains their completion", 
           },
         },
       ])
-      expect(aborted).toBe(false)
+      expect(interrupted).toBe(false)
 
       const completion = fetch(`${injected.options.endpoint}/background/call_background`, { headers })
         .then((response) => response.json())
@@ -345,15 +347,14 @@ it.effect("notifies OpenCode when a registered background shell completes", () =
 it.effect("cancels retained background shells when the controller stops", () =>
   Effect.gen(function* () {
     const started = Promise.withResolvers<void>()
-    const aborted = Promise.withResolvers<void>()
+    const interrupted = Promise.withResolvers<void>()
     const scope = yield* Scope.make()
     const controller = yield* ToolController.make((tools) => {
-      tools.handle("shell", ({ signal }) =>
-        Effect.gen(function* () {
-          signal.addEventListener("abort", () => aborted.resolve(), { once: true })
-          started.resolve()
-          return yield* Effect.never
-        }),
+      tools.handle("shell", () =>
+        Effect.sync(() => started.resolve()).pipe(
+          Effect.andThen(Effect.never),
+          Effect.onInterrupt(() => Effect.sync(() => interrupted.resolve())),
+        ),
       )
     }).pipe(Scope.provide(scope))
     const config: OpenCodeConfig = {}
@@ -376,22 +377,75 @@ it.effect("cancels retained background shells when the controller stops", () =>
     )
     yield* Effect.promise(() => started.promise)
     yield* Scope.close(scope, Exit.void)
-    yield* Effect.promise(() => aborted.promise)
+    yield* Effect.promise(() => interrupted.promise)
   }),
 )
 
-it.effect("aborts a handler when its transport disconnects", () =>
+it.effect("waits for foreground handler finalizers when the controller stops", () =>
+  Effect.gen(function* () {
+    const started = Promise.withResolvers<void>()
+    const finalizing = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<void>()
+    let finalized = false
+    const scope = yield* Scope.make()
+    const controller = yield* ToolController.make((tools) => {
+      tools.handle("shell", () =>
+        Effect.sync(() => started.resolve()).pipe(
+          Effect.andThen(Effect.never),
+          Effect.onInterrupt(() =>
+            Effect.sync(() => finalizing.resolve()).pipe(
+              Effect.andThen(Effect.promise(() => release.promise)),
+              Effect.andThen(Effect.sync(() => {
+                finalized = true
+              })),
+            ),
+          ),
+        ),
+      )
+    }).pipe(Scope.provide(scope))
+    const config: OpenCodeConfig = {}
+    controller.configure(config)
+    const injected = (config.plugins as Array<{
+      options: { endpoint: string; token: string }
+    }>)[0]!
+    const response = fetch(`${injected.options.endpoint}/execute/shell`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${injected.options.token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        input: { command: "wait" },
+        context: { callID: "call_foreground_shutdown" },
+      }),
+    }).then((response) => response.text()).catch(() => undefined)
+    yield* Effect.promise(() => started.promise)
+    let closed = false
+    const close = Effect.runPromise(Scope.close(scope, Exit.void)).then(() => {
+      closed = true
+    })
+    yield* Effect.promise(() => finalizing.promise)
+    expect(closed).toBe(false)
+    expect(finalized).toBe(false)
+    release.resolve()
+    yield* Effect.promise(() => close)
+    yield* Effect.promise(() => response)
+    expect(closed).toBe(true)
+    expect(finalized).toBe(true)
+  }),
+)
+
+it.effect("interrupts a handler when its transport disconnects", () =>
   Effect.scoped(
     Effect.gen(function* () {
       const started = Promise.withResolvers<void>()
-      const aborted = Promise.withResolvers<void>()
+      const interrupted = Promise.withResolvers<void>()
       const controller = yield* ToolController.make((tools) => {
-        tools.handle("shell", ({ signal }) =>
-          Effect.gen(function* () {
-            signal.addEventListener("abort", () => aborted.resolve(), { once: true })
-            started.resolve()
-            return yield* Effect.never
-          }),
+        tools.handle("shell", () =>
+          Effect.sync(() => started.resolve()).pipe(
+            Effect.andThen(Effect.never),
+            Effect.onInterrupt(() => Effect.sync(() => interrupted.resolve())),
+          ),
         )
       })
       const config: OpenCodeConfig = {}
@@ -414,8 +468,54 @@ it.effect("aborts a handler when its transport disconnects", () =>
       }).catch(() => undefined)
       yield* Effect.promise(() => started.promise)
       request.abort()
-      yield* Effect.promise(() => aborted.promise)
+      yield* Effect.promise(() => interrupted.promise)
       yield* Effect.promise(() => response)
+    }),
+  ),
+)
+
+it.effect("interrupts a handler with its plugin execution", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const started = Promise.withResolvers<void>()
+      const interrupted = Promise.withResolvers<void>()
+      const controller = yield* ToolController.make((tools) => {
+        tools.handle("shell", () =>
+          Effect.sync(() => started.resolve()).pipe(
+            Effect.andThen(Effect.never),
+            Effect.onInterrupt(() => Effect.sync(() => interrupted.resolve())),
+          ),
+        )
+      })
+      const config: OpenCodeConfig = {}
+      controller.configure(config)
+      const options = (config.plugins as Array<{ options: unknown }>)[0]!.options
+      let shell: RegisteredTool | undefined
+      yield* plugin.effect({
+        options,
+        tool: {
+          transform: (register: (tools: { add: (name: string, tool: RegisteredTool) => void }) => void) =>
+            Effect.sync(() =>
+              register({
+                add: (name, tool) => {
+                  if (name === "shell") shell = tool
+                },
+              }),
+            ),
+        },
+        session: {
+          synthetic: () => Effect.void,
+        },
+      })
+      if (shell === undefined) return yield* Effect.die(new Error("shell tool was not registered"))
+
+      const execution = yield* shell.execute(
+        { command: "wait" },
+        { sessionID: "ses_interrupt", callID: "call_interrupt" },
+      ).pipe(Effect.forkScoped)
+      yield* Effect.promise(() => started.promise)
+      yield* Fiber.interrupt(execution)
+      yield* Effect.promise(() => interrupted.promise)
     }),
   ),
 )

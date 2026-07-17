@@ -147,10 +147,11 @@ Drive prefers protocol negotiation and reports explicit legacy fallback. Set `op
 
 Use `tools` to replace shell execution without changing the model-visible tool
 schema. The handler receives typed input, a zero-based call index, and an Effect
-progress function. It also receives an `AbortSignal` from the OpenCode tool
-transport; handler Effects are interrupted when that signal aborts. This
-transport signal is separate from script lifecycle cancellation, which uses
-Effect interruption. Unregistered tools remain real.
+progress function. Foreground handler Effects are interrupted when OpenCode
+interrupts the session, the transport disconnects, or Drive shuts down; use
+Effect finalizers for cancellation cleanup. Detached background shell handlers
+continue after their launch response and are interrupted when Drive shuts down.
+Unregistered tools remain real.
 
 ```ts
 import { Effect } from "effect"
