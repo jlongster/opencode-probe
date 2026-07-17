@@ -298,8 +298,6 @@ export function App({ catalog }: AppProps) {
         ) : (
           <ContactSheet
             screens={screens}
-            mode={ui.mode}
-            taxonomy={taxonomy}
             selectedId={selectedId}
             focusTick={ui.gridFocusTick}
             keyboardEnabled={!ui.viewerOpen && !ui.paletteOpen}

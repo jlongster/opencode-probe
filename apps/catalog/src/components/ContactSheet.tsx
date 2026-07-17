@@ -1,13 +1,11 @@
 import { useEffect, useEffectEvent, useRef } from "react"
-import type { BrowseMode, Screen, TaxonomyGroup } from "../catalog"
-import { frameFor, taxonomyLabel } from "../catalog"
-import { CopyIdButton } from "./CopyIdButton"
+import type { Screen } from "../catalog"
+import { frameFor } from "../catalog"
+import { IdChip } from "./IdChip"
 import { TerminalFrame } from "./TerminalFrame"
 
 interface ContactSheetProps {
   readonly screens: ReadonlyArray<Screen>
-  readonly mode: BrowseMode
-  readonly taxonomy: ReadonlyArray<TaxonomyGroup>
   readonly selectedId: string | undefined
   readonly focusTick: number
   readonly keyboardEnabled: boolean
@@ -18,8 +16,6 @@ interface ContactSheetProps {
 
 export function ContactSheet({
   screens,
-  mode,
-  taxonomy,
   selectedId,
   focusTick,
   keyboardEnabled,
@@ -79,7 +75,6 @@ export function ContactSheet({
         <p className="empty-state">No captures match.</p>
       ) : (
         screens.map((screen) => {
-          const values = mode === "screens" ? screen.screenLabels : screen.uiElements
           const frame = frameFor(screen, variantId)
           return (
             <article
@@ -100,17 +95,11 @@ export function ContactSheet({
                 <span className="capture-frame">
                   <TerminalFrame frame={frame} label={screen.title} lazy />
                 </span>
-                <span className="capture-caption">
-                  <span className="capture-title">{screen.title}</span>
-                  <span className="capture-labels">
-                    {values.slice(0, 3).map((value) => (
-                      <span key={value}>{taxonomyLabel(taxonomy, value)}</span>
-                    ))}
-                    {values.length > 3 ? <span>+{values.length - 3}</span> : undefined}
-                  </span>
-                </span>
               </button>
-              <CopyIdButton identifier={screen.id} />
+              <footer className="capture-caption">
+                <span className="capture-title">{screen.title}</span>
+                <IdChip id={screen.id} />
+              </footer>
             </article>
           )
         })
