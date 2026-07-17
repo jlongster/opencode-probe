@@ -37,7 +37,13 @@ test.sequential("CLI drives an externally owned OpenCode endpoint on the default
           return
         }
         requests.push(request)
-        socket.send(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: state }))
+        socket.send(
+          JSON.stringify({
+            jsonrpc: "2.0",
+            id: request.id,
+            result: request.method === "ui.screenshot" ? "/tmp/home.png" : state,
+          }),
+        )
       },
     },
   })
@@ -51,9 +57,14 @@ test.sequential("CLI drives an externally owned OpenCode endpoint on the default
     expect(second.status).toBe(0)
     expect(JSON.parse(second.stdout)).toEqual(state)
 
+    const screenshot = await send(root, ["--command.ui.screenshot", '{"name":"home"}'])
+    expect(screenshot.status).toBe(0)
+    expect(screenshot.stdout.trim()).toBe("/tmp/home.png")
+
     expect(requests).toEqual([
       { jsonrpc: "2.0", id: 1, method: "ui.state" },
       { jsonrpc: "2.0", id: 1, method: "ui.state" },
+      { jsonrpc: "2.0", id: 1, method: "ui.screenshot", params: { name: "home" } },
     ])
   } finally {
     await server.stop(true)
@@ -62,7 +73,11 @@ test.sequential("CLI drives an externally owned OpenCode endpoint on the default
 })
 
 async function sendState(root: string) {
-  const child = Bun.spawn([process.execPath, resolve("src/cli/index.ts"), "send", "--command.ui.state"], {
+  return send(root, ["--command.ui.state"])
+}
+
+async function send(root: string, args: string[]) {
+  const child = Bun.spawn([process.execPath, resolve("src/cli/index.ts"), "send", ...args], {
     cwd: resolve("."),
     env: {
       ...process.env,

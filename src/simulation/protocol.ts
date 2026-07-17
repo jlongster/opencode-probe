@@ -233,7 +233,7 @@ export namespace Frontend {
     key: string,
     modifiers?: KeyModifiers,
   ): PressParams => ({
-    key: key === "escape" ? "\u001b" : key,
+    key,
     ...(modifiers === undefined ? {} : { modifiers }),
   })
 

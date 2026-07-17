@@ -15,9 +15,11 @@ export function extractCommands(args: ReadonlyArray<string>) {
       continue
     }
     const operation = flag.slice("--command.".length)
-    const acceptsValue = commandAcceptsValue(operation)
-    const value = acceptsValue ? cli[++index] : undefined
-    if (acceptsValue && (value === undefined || value.startsWith("--"))) throw new Error(`${flag} requires a value`)
+    const valueMode = commandAcceptsValue(operation)
+    const next = cli[index + 1]
+    const takesValue = valueMode === true || (valueMode === "optional" && next !== undefined && !next.startsWith("--"))
+    const value = takesValue ? cli[++index] : undefined
+    if (valueMode === true && (value === undefined || value.startsWith("--"))) throw new Error(`${flag} requires a value`)
     commands.push({ operation, ...(value === undefined ? {} : { value }) })
   }
   return { args: remaining, app, commands }

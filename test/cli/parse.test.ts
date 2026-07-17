@@ -9,6 +9,8 @@ describe("drive CLI parser", () => {
         "--command.ui.type",
         '{"text":"hello"}',
         "--command.ui.screenshot",
+        '{"name":"home"}',
+        "--command.ui.screenshot",
         "--command.ui.matches",
         '{"text":"hello"}',
         "--command.ui.state",
@@ -18,6 +20,7 @@ describe("drive CLI parser", () => {
       app: [],
       commands: [
         { operation: "ui.type", value: '{"text":"hello"}' },
+        { operation: "ui.screenshot", value: '{"name":"home"}' },
         { operation: "ui.screenshot" },
         { operation: "ui.matches", value: '{"text":"hello"}' },
         { operation: "ui.state" },

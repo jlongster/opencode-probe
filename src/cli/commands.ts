@@ -19,8 +19,8 @@ export const commandInfo = {
     description: "Resize terminal viewport using JSON params",
   },
   "ui.screenshot": {
-    value: false,
-    description: "Take a screenshot and return its path",
+    value: "optional",
+    description: "Take a screenshot with optional JSON params and return its path",
   },
   "ui.capture": {
     value: false,
@@ -161,8 +161,16 @@ async function execute(
         throw new Error("invalid ui.resize params")
       return ui.resize(request.params)
     }
-    case "ui.screenshot":
-      return ui.screenshot()
+    case "ui.screenshot": {
+      const request = Frontend.decodeRequest({
+        jsonrpc: "2.0",
+        method: "ui.screenshot",
+        ...(command.value === undefined ? {} : { params: json(command.value) }),
+      })
+      if (request.method !== "ui.screenshot")
+        throw new Error("invalid ui.screenshot params")
+      return ui.screenshot(request.params?.name)
+    }
     case "ui.capture":
       return ui.capture()
     case "ui.state":

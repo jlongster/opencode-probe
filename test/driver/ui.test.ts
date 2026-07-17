@@ -81,7 +81,7 @@ describe("OpenCodeUi", () => {
           jsonrpc: "2.0",
           id: 3,
           method: "ui.press",
-          params: { key: "\u001b", modifiers: { ctrl: true } },
+          params: { key: "escape", modifiers: { ctrl: true } },
         },
         { jsonrpc: "2.0", id: 4, method: "ui.state" },
         {

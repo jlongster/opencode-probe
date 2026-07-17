@@ -99,7 +99,7 @@ describe("OpenCode UI simulation transport", () => {
           jsonrpc: "2.0",
           id: 9,
           method: "ui.press",
-          params: { key: "\x1b" },
+          params: { key: "escape" },
         },
         { jsonrpc: "2.0", id: 10, method: "ui.enter" },
         {

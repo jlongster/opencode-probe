@@ -275,6 +275,8 @@ opencode-drive stop --name demo
 - `--command.ui.arrow '{"direction":"down"}'`
 - `--command.ui.focus '{"target":12}'`
 - `--command.ui.click '{"target":12,"x":4,"y":1}'`
+- `--command.ui.resize '{"cols":120,"rows":40}'`
+- `--command.ui.screenshot` or `--command.ui.screenshot '{"name":"home"}'`
 - `--command.ui.state`
 - `--command.ui.capture`
 - `--command.ui.matches '{"text":"OpenCode"}'`
