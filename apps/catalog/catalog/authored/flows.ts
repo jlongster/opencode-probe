@@ -1,4 +1,6 @@
 import { defineFlows } from "../dsl"
+import { stepsFromFlow } from "../flow"
+import { patchSuccessFlow } from "../../scenarios/tools/patch-success"
 import { screens } from "./screens"
 
 export const flowGroups = defineFlows(screens, {
@@ -58,13 +60,9 @@ export const flowGroups = defineFlows(screens, {
     label: "Tool use",
     flows: {
       "patch-success-lifecycle": {
-        title: "Patch succeeds",
-        description: "Watch a patch stream its input, request permission, and complete successfully.",
-        steps: [
-          { capture: "patch-input-streaming", title: "Input streams" },
-          { capture: "permission-prompt", title: "Permission is requested" },
-          { capture: "patch-success", title: "Patch succeeds" },
-        ],
+        title: patchSuccessFlow.title,
+        description: patchSuccessFlow.description,
+        steps: stepsFromFlow(patchSuccessFlow),
       },
       "approving-a-tool-call": {
         title: "Approving a tool call",

@@ -173,7 +173,7 @@ Install the skill file above and ask the agent to test various flows with the ap
 
 Screenshots and videos are written to `<system temp>/opencode-drive/output` with unique filenames. Set `OPENCODE_DRIVE_MEDIA_DIR` to use a different directory.
 
-Captured frames use the official full Commit Mono v1.143 faces at 16px with a bundled Noto Sans Symbols 2 fallback in a fixed 10x20 cell grid. Set `OPENCODE_DRIVE_FONT` to a comma-separated list of font files (for example regular, bold, italic, and bold-italic faces) to use a different primary capture font without changing the symbol fallback or cell geometry.
+Captured frames use the official full Commit Mono v1.143 faces at 16px with bundled Noto Symbols, Symbols 2, and Math fallbacks in a fixed 10x20 cell grid. Set `OPENCODE_DRIVE_FONT` to a comma-separated list of font files (for example regular, bold, italic, and bold-italic faces) to use a different primary capture font without changing the symbol fallback or cell geometry.
 
 ## UI development
 
@@ -431,6 +431,12 @@ remains available for provider-wire scenarios not covered by these helpers.
 Script capability errors are typed and the concrete classes are grouped under
 `ScriptError`. UI timeouts remain owner-fatal even when caught; recover locally
 from errors for which the script has a truthful fallback:
+
+Polling timeouts from `ui.waitFor` and `ui.getElement` make one best-effort,
+bounded `ui.capture` request. When it succeeds, the resulting normalized
+terminal frame is available as `error.frame` without creating or retaining a
+screenshot file. RPC-level timeouts and failed diagnostic captures leave
+`error.frame` undefined.
 
 ```ts
 import { Effect } from "effect"

@@ -5,7 +5,8 @@ import { Effect } from "effect"
 import { Llm, OpenCodeDriver } from "opencode-drive"
 import { screens, type CaptureId } from "../catalog/authored/screens"
 import type { ScreenCategory } from "../catalog/dsl"
-import { capturePatchSuccess } from "../scenarios/tools/patch-success"
+import { executeFlow } from "../catalog/flow"
+import { patchSuccessFlow } from "../scenarios/tools/patch-success"
 
 type Capture = {
   readonly id: CaptureId
@@ -120,7 +121,10 @@ const captureVariant = (variant: Variant) => OpenCodeDriver.use(
         yield* close()
       }
 
-      yield* capturePatchSuccess(driver, capture)
+      yield* executeFlow(patchSuccessFlow, {
+        driver,
+        capture: (state) => capture(state.id),
+      })
 
       const sessionDialogs = [
         ["/rename", "Rename session", "session-rename"],

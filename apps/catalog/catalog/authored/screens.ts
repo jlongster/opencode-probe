@@ -1,4 +1,6 @@
 import { defineScreens, type ScreenId } from "../dsl"
+import { screensFromFlow } from "../flow"
+import { patchSuccessFlow } from "../../scenarios/tools/patch-success"
 import { taxonomies } from "./taxonomies"
 
 export const screens = defineScreens(taxonomies, {
@@ -132,43 +134,7 @@ export const screens = defineScreens(taxonomies, {
     features: "skill",
     states: "default",
   },
-  "permission-prompt": {
-    title: "Permission prompt",
-    category: "session",
-    screenLabels: ["tool-execution"],
-    uiElements: [
-      "inline-prompt",
-      "approval-actions",
-      "button-group",
-      "keyboard-hints",
-      "confirmation",
-      "destructive-action",
-    ],
-    surfaces: "inline",
-    patterns: "approval",
-    features: ["permission", "tool"],
-    states: "confirmation",
-  },
-  "patch-input-streaming": {
-    title: "Patch input streaming",
-    category: "session",
-    screenLabels: ["tool-execution"],
-    uiElements: ["transcript", "tool-card", "status-indicator"],
-    surfaces: "inline",
-    patterns: "status",
-    features: ["tool", "patch"],
-    states: "streaming",
-  },
-  "patch-success": {
-    title: "Patch succeeded",
-    category: "session",
-    screenLabels: ["tool-execution"],
-    uiElements: ["transcript", "tool-card", "confirmation"],
-    surfaces: "inline",
-    patterns: "status",
-    features: ["tool", "patch"],
-    states: "success",
-  },
+  ...screensFromFlow(patchSuccessFlow),
   "session-rename": {
     title: "Rename session",
     category: "session",

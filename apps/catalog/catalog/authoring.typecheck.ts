@@ -1,4 +1,5 @@
 import { defineFlows, defineScreens, defineTaxonomies } from "./dsl"
+import { defineExecutableFlow, executeFlow } from "./flow"
 
 const taxonomies = defineTaxonomies({
   screenLabels: {
@@ -67,4 +68,48 @@ defineFlows(screens, {
       },
     },
   },
+})
+
+const firstFlow = defineExecutableFlow(
+  taxonomies,
+  {
+    id: "first-flow",
+    title: "First flow",
+    group: { id: "tests", label: "Tests" },
+    description: "First flow.",
+  },
+  ({ state, program }) => {
+    const first = state("first", {
+      screen: screens["session-picker"],
+      step: { title: "First" },
+    })
+    return program([first], ({ checkpoint }) => checkpoint(first))
+  },
+)
+
+const secondFlow = defineExecutableFlow(
+  taxonomies,
+  {
+    id: "second-flow",
+    title: "Second flow",
+    group: { id: "tests", label: "Tests" },
+    description: "Second flow.",
+  },
+  ({ state, program }) => {
+    const second = state("second", {
+      screen: screens["session-picker"],
+      step: { title: "Second" },
+    })
+    return program([second], ({ checkpoint }) => {
+      // @ts-expect-error Checkpoints only accept states declared by this flow.
+      return checkpoint(firstFlow.states[0])
+    })
+  },
+)
+
+executeFlow(secondFlow, {
+  driver: undefined as never,
+  // @ts-expect-error Selected states must belong to the executed flow.
+  through: firstFlow.states[0],
+  capture: () => undefined as never,
 })

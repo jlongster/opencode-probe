@@ -37,7 +37,7 @@ export type TaxonomyDefinition = Readonly<
 >
 
 type ValueOf<T> = T[keyof T]
-type TaxonomyItemId<T extends TaxonomyDefinition> = ValueOf<T> extends infer Group
+export type TaxonomyItemId<T extends TaxonomyDefinition> = ValueOf<T> extends infer Group
   ? Group extends { readonly items: infer Items extends Readonly<Record<string, string>> }
     ? Extract<keyof Items, string>
     : never
