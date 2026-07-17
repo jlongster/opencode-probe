@@ -23,9 +23,9 @@ export async function opencodeLogFile(artifacts: string) {
   }
 }
 
-export async function logReadyPaths(artifacts: string) {
-  logSuccess(`opencode instance logs: ${await opencodeLogFile(artifacts)}`)
-  logSuccess(`current run script logs: ${driveLogFile(artifacts)}`)
+export async function logReadyPaths(artifacts: string, options?: { readonly terminal?: boolean }) {
+  logSuccess(`opencode instance logs: ${await opencodeLogFile(artifacts)}`, options)
+  logSuccess(`current run script logs: ${driveLogFile(artifacts)}`, options)
 }
 
 export function configureLogFile(artifacts: string) {
@@ -34,9 +34,9 @@ export function configureLogFile(artifacts: string) {
   return currentLogFile
 }
 
-export function logSuccess(message: string) {
+export function logSuccess(message: string, options: { readonly terminal?: boolean } = {}) {
   const line = `${prefix}: ${message}`
-  console.error(process.stderr.isTTY ? `\x1b[32m${line}\x1b[0m` : line)
+  if (options.terminal !== false) console.error(process.stderr.isTTY ? `\x1b[32m${line}\x1b[0m` : line)
   append("INFO", message)
 }
 

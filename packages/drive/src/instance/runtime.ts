@@ -200,14 +200,15 @@ export const make = Effect.fn("OpenCodeInstance.make")(function* (
     driveName: string,
     appCommand: ReadonlyArray<string>,
     logName: string,
+    visible: boolean,
   ) {
     options.log?.(`launching ${logName}`)
     return yield* Process.spawn(appCommand, {
       cwd: files,
       env: { ...environment, OPENCODE_DRIVE: driveName },
-      stdin: options.visible ? "inherit" : "ignore",
-      stdout: options.visible ? "inherit" : { path: join(logs, `${logName}.stdout.log`) },
-      stderr: options.visible ? "inherit" : { path: join(logs, `${logName}.stderr.log`) },
+      stdin: visible ? "inherit" : "ignore",
+      stdout: visible ? "inherit" : { path: join(logs, `${logName}.stdout.log`) },
+      stderr: visible ? "inherit" : { path: join(logs, `${logName}.stderr.log`) },
     }).pipe(
       Effect.provideService(
         ChildProcessSpawner.ChildProcessSpawner,
@@ -224,7 +225,7 @@ export const make = Effect.fn("OpenCodeInstance.make")(function* (
   ) {
     yield* writeManifest(options.name, endpoints, recording, options.viewport)
     options.log?.("launching OpenCode")
-    return yield* spawn(options.name, command, "opencode")
+    return yield* spawn(options.name, command, "opencode", options.visible ?? false)
   })
 
   if (!options.scripted) {
@@ -248,7 +249,7 @@ export const make = Effect.fn("OpenCodeInstance.make")(function* (
           backend: endpoints.backend,
         })
         options.log?.("launching script server")
-        const server = yield* spawn(name, [...command, "serve", "--service"], "service")
+        const server = yield* spawn(name, [...command, "serve", "--service"], "service", false)
         yield* Ref.update(state, (value) => ({ ...value, pendingServer: server }))
         return server
       }),
@@ -357,7 +358,7 @@ export const make = Effect.fn("OpenCodeInstance.make")(function* (
           tuiOptions.viewport ?? options.viewport,
         )
         options.log?.(`launching TUI ${name}`)
-        const tui = yield* spawn(driveName, command, `tui-${name}`)
+        const tui = yield* spawn(driveName, command, `tui-${name}`, options.visible ?? false)
         yield* Ref.update(state, (value) => ({
           ...value,
           pendingTuis: new Map(value.pendingTuis).set(name, tui),

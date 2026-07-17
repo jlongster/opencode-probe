@@ -7,6 +7,10 @@ const role = serviceMode
     ? "service"
     : "client"
   : "legacy"
+if (process.argv.includes("stdio-markers")) {
+  console.log(`fake-${role}-stdout`)
+  console.error(`fake-${role}-stderr`)
+}
 if (role === "service" && process.env.OPENCODE_TEST_HOME)
   await Promise.all([
     Bun.write(`${process.env.OPENCODE_TEST_HOME}/service.pid`, String(process.pid)),

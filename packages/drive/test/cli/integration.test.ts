@@ -996,6 +996,41 @@ describe("opencode-drive", () => {
     expect(await Bun.file(join(root, "registry", `${name}.json`)).exists()).toBe(false)
   })
 
+  test("keeps service and progress output out of a visible client terminal", async () => {
+    const root = await temporary()
+    const child = spawn(
+      [
+        "start",
+        "--visible",
+        "--name",
+        "visible-output-test",
+        "--script",
+        fixture("script.ts"),
+        "--",
+        process.execPath,
+        fixture("fake-opencode.ts"),
+        "stdio-markers",
+      ],
+      root,
+    )
+    const [status, stdout, stderr] = await Promise.all([
+      child.exited,
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+    ])
+    expect(status).toBe(0)
+    expect(stdout).toContain("fake-client-stdout")
+    expect(stdout).not.toContain("fake-service-stdout")
+    expect(stderr).toContain("fake-client-stderr")
+    expect(stderr).not.toContain("fake-service-stderr")
+    expect(stderr).not.toContain("script completed")
+
+    const artifacts = artifactPath(stderr)
+    expect(await Bun.file(join(artifacts, "logs", "service.stdout.log")).text()).toContain("fake-service-stdout")
+    expect(await Bun.file(join(artifacts, "logs", "service.stderr.log")).text()).toContain("fake-service-stderr")
+    expect(await Bun.file(join(artifacts, "logs", "opencode-drive.log")).text()).toContain("script completed")
+  })
+
   test.each(["title-requests", "latest-title-requests"])(
     "routes %s outside the normal LLM response sequence",
     async (mode) => {
