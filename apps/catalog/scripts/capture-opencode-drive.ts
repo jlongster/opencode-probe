@@ -102,7 +102,7 @@ function captureScenarioClient(
 ) {
   const clientName = `catalog-${scenarios[0]?.id ?? "empty"}-${scenarios.length}`
   return Effect.acquireUseRelease(
-    driver.clients.launch(clientName, { viewport: catalogViewport }),
+    driver.tuis.launch(clientName, { viewport: catalogViewport }),
     (client) => Effect.gen(function* () {
       const captures: Array<Capture> = []
       for (const scenario of scenarios) {
