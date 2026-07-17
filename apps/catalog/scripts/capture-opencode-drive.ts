@@ -5,9 +5,12 @@ import { fileURLToPath } from "node:url"
 import { Effect } from "effect"
 import { Llm, OpenCodeDriver } from "opencode-drive"
 import { screens, type CaptureId } from "../catalog/authored/screens"
-import type { ScreenCategory } from "../catalog/dsl"
-import { executeFlow } from "../catalog/flow"
+import type { NonEmpty, ScreenCategory } from "../catalog/dsl"
+import { executeFlow, type ExecutableFlow, type FlowState } from "../catalog/flow"
 import { patchSuccessFlow } from "../scenarios/tools/patch-success"
+import { shellLifecycleFlow } from "../scenarios/tools/shell-lifecycle"
+import { subagentLifecycleFlow } from "../scenarios/subagents/subagent-lifecycle"
+import { catalogScenarioRuntime } from "../scenarios/runtime"
 import type { DriveManifest, Variant as CaptureSet } from "../catalog/schema"
 import {
   captureSetId,
@@ -40,34 +43,20 @@ type Variant = {
   readonly theme?: string
 }
 
-const viewport = { cols: 118, rows: 34 } as const
 const defaultOpenCode = fileURLToPath(new URL("../../../../opencode-v2-latest/", import.meta.url))
 const options = parseCaptureOptions(process.argv.slice(2), defaultOpenCode)
 const prepared = await prepareCaptureSets(options)
 const variants = prepared.variants
 
-const captureVariant = (variant: Variant) => OpenCodeDriver.use(
-  {
-    project: { files: { "fixture.txt": "before\n" } },
-    config: {
-      autoupdate: false,
-      permissions: [{ action: "*", resource: "*", effect: "ask" }],
-      agents: {
-        reviewer: { description: "Reviews deterministic UI fixtures", mode: "primary" },
-        researcher: { description: "Explores fixture source code", mode: "subagent" },
-      },
-    },
-    setup:
-      variant.theme === undefined
-        ? undefined
-        : ({ fs }) =>
-            fs.writeFile(
-              ".opencode/tui.json",
-              `${JSON.stringify({ $schema: "https://opencode.ai/tui.json", theme: variant.theme }, undefined, 2)}\n`,
-            ),
-    client: { viewport },
-    opencode: { dev: variant.path },
-  },
+const captureVariant = (variant: Variant) => Effect.gen(function* () {
+  const baseline = yield* captureBaseline(variant)
+  const shell = yield* captureFlow(variant, shellLifecycleFlow)
+  const subagent = yield* captureFlow(variant, subagentLifecycleFlow)
+  return [...baseline, ...shell, ...subagent]
+})
+
+const captureBaseline = (variant: Variant) => OpenCodeDriver.use(
+  catalogScenarioRuntime({ opencode: variant.path, theme: variant.theme }),
   (driver) =>
     Effect.gen(function* () {
       const captures: Capture[] = []
@@ -206,10 +195,45 @@ const captureVariant = (variant: Variant) => OpenCodeDriver.use(
       yield* openSlash("/diff", "Diff working tree")
       yield* driver.ui.waitFor("No changes to show")
       yield* capture("diff-viewer")
+      yield* close()
 
       return captures
     }),
 )
+
+function captureFlow<
+  FlowId extends string,
+  States extends NonEmpty<FlowState<FlowId, CaptureId>>,
+  Error,
+>(variant: Variant, flow: ExecutableFlow<FlowId, States, Error, never>) {
+  return OpenCodeDriver.use(
+    catalogScenarioRuntime({ opencode: variant.path, theme: variant.theme }),
+    (driver) => Effect.gen(function* () {
+      const captures: Array<Capture> = []
+      yield* executeFlow(flow, {
+        driver,
+        capture: (state) => Effect.gen(function* () {
+          const screen = screens[state.id]
+          const frame = yield* driver.ui.capture()
+          const src = `captures/${variant.id}/${state.id}.frame.json`
+          yield* Effect.promise(() =>
+            Bun.write(
+              new URL(`../public/${src}`, import.meta.url),
+              `${JSON.stringify({ format: "opencode-terminal-frame-v1", ...frame })}\n`,
+            ),
+          )
+          captures.push({
+            id: state.id,
+            title: screen.title,
+            category: screen.category,
+            frame: { variantId: variant.id, src, cols: frame.cols, rows: frame.rows },
+          })
+        }),
+      })
+      return captures
+    }),
+  )
+}
 
 try {
   const captured = await Effect.runPromise(

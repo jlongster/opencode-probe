@@ -3,53 +3,31 @@ import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { Effect } from "effect"
 import { OpenCodeDriver } from "opencode-drive"
-import { executeFlow } from "../catalog/flow"
-import { executableFlows } from "../scenarios"
+import { executableStates } from "../scenarios"
+import { catalogScenarioRuntime } from "../scenarios/runtime"
 
 const defaultOpenCode = fileURLToPath(new URL("../../../../opencode-v2-latest/", import.meta.url))
 const options = parseArgs(process.argv.slice(2))
-const selected = executableFlows.flatMap((flow) =>
-  flow.states.flatMap((state) => state.address === options.address ? [{ flow, state }] : []),
-)[0]
+const selected = executableStates.find((entry) => entry.address === options.address)
 
 if (!selected) {
-  const known = executableFlows.flatMap((flow) => flow.states.map((state) => state.address))
+  const known = executableStates.map((entry) => entry.address)
   throw new Error(`Unknown catalog state ${JSON.stringify(options.address)}. Known states:\n${known.join("\n")}`)
 }
 
 await Effect.runPromise(
   OpenCodeDriver.use(
-    {
-      project: { files: { "fixture.txt": "before\n" } },
-      config: {
-        autoupdate: false,
-        permissions: [{ action: "*", resource: "*", effect: "ask" }],
-      },
-      setup:
-        options.theme === undefined
-          ? undefined
-          : ({ fs }) =>
-              fs.writeFile(
-                ".opencode/tui.json",
-                `${JSON.stringify({ $schema: "https://opencode.ai/tui.json", theme: options.theme }, undefined, 2)}\n`,
-              ),
-      client: { viewport: { cols: 118, rows: 34 } },
-      opencode: { dev: options.opencode },
-    },
-    (driver) => executeFlow(selected.flow, {
-      driver,
-      through: selected.state,
-      capture: () => Effect.gen(function* () {
-        const frame = yield* driver.ui.capture()
-        yield* Effect.promise(() => mkdir(dirname(options.output), { recursive: true }))
-        yield* Effect.promise(() =>
-          Bun.write(
-            options.output,
-            `${JSON.stringify({ format: "opencode-terminal-frame-v1", ...frame })}\n`,
-          ),
-        )
-      }),
-    }),
+    catalogScenarioRuntime({ opencode: options.opencode, theme: options.theme }),
+    (driver) => selected.run(driver, () => Effect.gen(function* () {
+      const frame = yield* driver.ui.capture()
+      yield* Effect.promise(() => mkdir(dirname(options.output), { recursive: true }))
+      yield* Effect.promise(() =>
+        Bun.write(
+          options.output,
+          `${JSON.stringify({ format: "opencode-terminal-frame-v1", ...frame })}\n`,
+        ),
+      )
+    })),
   ),
 )
 
