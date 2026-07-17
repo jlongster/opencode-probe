@@ -1,7 +1,7 @@
 import { useEffect, useEffectEvent, useRef } from "react"
 import type { Facet, Filter, Screen, Taxonomy, TaxonomyGroup, Variant } from "../catalog"
 import { facetValues, frameFor, label, taxonomyLabel } from "../catalog"
-import { CopyIdButton } from "./CopyIdButton"
+import { IdChip } from "./IdChip"
 import { TerminalFrame } from "./TerminalFrame"
 
 interface ViewerProps {
@@ -91,7 +91,7 @@ export function Viewer({
           <button type="button" className="viewer-button" onClick={() => onNavigate(1)} aria-label="Next flow step">→</button>
         </span>
         <div className="viewer-actions">
-          <CopyIdButton identifier={identifier} className="viewer-button" />
+          <IdChip id={identifier} className="viewer-button" />
           <button type="button" className="viewer-button" onClick={() => onVariant(-1)} aria-label="Previous variant">←</button>
           <span className="viewer-variant"><strong>{variant.label}</strong> {variantPosition}/{variantTotal}</span>
           <button type="button" className="viewer-button" onClick={() => onVariant(1)} aria-label="Next variant">→</button>

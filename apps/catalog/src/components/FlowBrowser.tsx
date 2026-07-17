@@ -1,6 +1,6 @@
 import type { Catalog, Flow } from "../catalog"
 import { frameFor } from "../catalog"
-import { CopyIdButton } from "./CopyIdButton"
+import { IdChip } from "./IdChip"
 import { TerminalFrame } from "./TerminalFrame"
 
 interface FlowBrowserProps {
@@ -77,19 +77,24 @@ export function FlowBrowser({ catalog, flows, activeFlow, variantId, onFlow, onO
             const frame = frameFor(screen, variantId)
             return (
               <li key={`${activeFlow.id}:${index}:${step.screenId}`} className="flow-step">
-                <button type="button" className="flow-open" onClick={() => onOpen(screen.id)}>
+                <button
+                  type="button"
+                  className="flow-open"
+                  aria-label={`Open ${step.title}`}
+                  onClick={() => onOpen(screen.id)}
+                >
                   <span className="flow-frame">
                     <TerminalFrame frame={frame} label={screen.title} lazy />
                   </span>
-                  <span className="flow-step-meta">
-                    <span className="flow-step-number">{String(index + 1).padStart(2, "0")}</span>
-                    <span>
-                      <strong>{step.title}</strong>
-                      {step.trigger ? <small>{step.trigger}</small> : undefined}
-                    </span>
-                  </span>
                 </button>
-                <CopyIdButton identifier={`${activeFlow.id}/${screen.id}`} />
+                <footer className="flow-step-meta">
+                  <span className="flow-step-number">{String(index + 1).padStart(2, "0")}</span>
+                  <span>
+                    <strong>{step.title}</strong>
+                    {step.trigger ? <small>{step.trigger}</small> : undefined}
+                    <IdChip id={`${activeFlow.id}/${screen.id}`} />
+                  </span>
+                </footer>
               </li>
             )
           })}

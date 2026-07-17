@@ -455,23 +455,21 @@ kbd {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: start;
-  gap: 3.5rem 2rem;
+  gap: 2.75rem 2rem;
   padding: 2.25rem 2rem 5rem;
 }
 
 .capture-card {
   display: grid;
-  gap: 0.65rem;
+  gap: 0.6rem;
   min-width: 0;
   width: 100%;
 }
 
 .capture-open {
-  display: grid;
-  gap: 0.65rem;
+  display: block;
   min-width: 0;
   width: 100%;
-  background: transparent;
   text-align: left;
 }
 
@@ -522,16 +520,34 @@ kbd {
   font-size: 0.52rem;
 }
 
+.capture-open:hover .capture-frame,
+.capture-card.selected .capture-frame {
+  outline-color: var(--catalog-frame-line-strong);
+}
+
 .capture-open:focus-visible {
   outline: 0;
 }
 
+.capture-open:focus-visible .capture-frame {
+  outline: 1px solid var(--catalog-accent);
+  outline-offset: 0.3rem;
+}
+
 .capture-caption {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.75rem;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
   min-width: 0;
+}
+
+.capture-caption .id-chip {
+  flex: 0 1 auto;
+}
+
+.capture-caption .id-chip-text {
+  justify-items: end;
 }
 
 .capture-title {
@@ -545,46 +561,62 @@ kbd {
   white-space: nowrap;
 }
 
-.capture-labels {
-  display: flex;
-  min-width: 0;
-  justify-content: flex-end;
-  gap: 0.35rem;
-  overflow: hidden;
+.capture-card.selected .capture-title {
+  color: var(--kit-fg-strong);
 }
 
-.capture-labels span {
-  overflow: hidden;
-  max-width: 9rem;
-  padding: 0.18rem 0.35rem;
-  background: rgb(255 255 255 / 4%);
+/* --------------------------------- id chip -------------------------------- */
+
+.id-chip {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  gap: 0.4rem;
   color: var(--kit-fg-faint);
   font-family: var(--kit-mono);
-  font-size: 0.54rem;
-  line-height: 1.2;
+  font-size: 0.6rem;
+  line-height: 1.5;
+}
+
+.id-chip:hover,
+.id-chip:focus-visible {
+  color: var(--kit-fg-strong);
+}
+
+.id-chip[data-copied] {
+  color: var(--catalog-accent);
+}
+
+.id-chip-glyph {
+  width: 0.7rem;
+  height: 0.7rem;
+  flex: none;
+  opacity: 0.6;
+}
+
+.id-chip-text {
+  display: grid;
+  min-width: 0;
+}
+
+.id-chip-text > span {
+  grid-area: 1 / 1;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.capture-open:hover .capture-title,
-.capture-card.selected .capture-title,
-.capture-open:focus-visible .capture-title {
-  color: var(--kit-fg-strong);
+.id-chip-copied {
+  visibility: hidden;
 }
 
-.copy-id-action {
-  width: fit-content;
-  padding: 0.3rem 0.45rem;
-  border: 1px solid var(--kit-line);
-  color: var(--kit-fg-faint);
-  font-family: var(--kit-mono);
-  font-size: 0.56rem;
+.id-chip[data-copied] .id-chip-value {
+  visibility: hidden;
 }
 
-.copy-id-action:hover,
-.copy-id-action:focus-visible {
-  border-color: var(--catalog-frame-line-strong);
-  color: var(--kit-fg-strong);
+.id-chip[data-copied] .id-chip-copied {
+  visibility: visible;
 }
 
 .empty-state {
@@ -768,9 +800,8 @@ kbd {
 }
 
 .flow-open {
-  display: grid;
+  display: block;
   width: 100%;
-  gap: 0.85rem;
   text-align: left;
 }
 
@@ -816,7 +847,8 @@ kbd {
 
 .flow-step-meta > span:last-child {
   display: grid;
-  gap: 0.25rem;
+  gap: 0.3rem;
+  justify-items: start;
 }
 
 .flow-step-meta strong {
@@ -893,6 +925,10 @@ kbd {
 
 .viewer-actions .viewer-button {
   border-left: 1px solid var(--kit-line);
+}
+
+.viewer-actions .id-chip {
+  max-width: 20rem;
 }
 
 .viewer-body {
