@@ -1,5 +1,19 @@
 # opencode-drive
 
+## 1.0.0
+
+### Major Changes
+
+- 1009394: Remove the Promise-based simulation clients. `SimulationClient`, `BackendSimulationClient`, `connectSimulation`, and `connectBackendSimulation` are gone, along with the `opencode-drive/experimental` entry point. The `opencode-drive/client` entry now exports only the canonical protocol schemas and default ports; the public API is Effect-only, as documented. The CLI drives instances through the Effect `SimulationConnector` directly.
+
+### Minor Changes
+
+- 9deab8d: Add the browser-safe `opencode-drive/frame` entry point: canonical cell geometry, OpenTUI text-attribute bits, the geometric block/bar glyph table, and baseline placement shared by the Drive PNG renderer and downstream canvas renderers. The PNG renderer now also draws the `┃` and `╹` structural bars geometrically instead of with fonts.
+
+### Patch Changes
+
+- 8481090: Settle simulated LLM responses cleanly when OpenCode terminates an invocation during interruption. Drive now uses the negotiated `llm.pending` capability to distinguish external termination from genuine response write failures.
+
 ## 0.6.0
 
 ### Minor Changes
