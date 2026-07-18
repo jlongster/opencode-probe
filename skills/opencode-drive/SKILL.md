@@ -12,6 +12,23 @@ restartable, or manual-launch workflows; it is also Effect-only. Use live
 commands only for interactive development against a persistent or visible
 instance.
 
+## OpenCode Source Default
+
+Unless the user explicitly names V1 or another ref, target OpenCode's canonical
+`v2` branch. Keep the reusable OpenCode checkout on local branch `v2`, tracking
+`origin/v2`, and refresh it before a run that requires current source. Do not
+silently substitute `dev`, `main`, or an old capture revision. If the intended
+generation is genuinely ambiguous, ask one concise clarifying question.
+
+For an exact historical comparison, use the source revision recorded by that
+capture set in a detached worktree. Otherwise reproduce catalog states against
+current `v2` first. If protocol drift prevents replay, report that incompatibility
+before falling back to the recorded revision.
+
+When the user asks to inspect or critique a screen, finish by calling
+`ui.screenshot(...)`, inspect the PNG, and upload it to the conversation. A raw
+frame artifact alone is not the deliverable.
+
 ## Catalog State IDs
 
 Browse and copy OpenCode terminal state IDs from:
@@ -34,7 +51,7 @@ bun run catalog:reproduce -- patch-success-lifecycle/permission-prompt \
   --output /tmp/permission-prompt.frame.json
 ```
 
-The command executes the registered recipe only through that checkpoint and writes an `opencode-terminal-frame-v1` artifact. Only flows in `apps/catalog/scenarios/index.ts` are replayable. Browse-only flows and screen cards copy standalone capture IDs instead; do not invent a flow prefix. Use a protocol-compatible OpenCode checkout, ideally the source revision shown by the selected capture set.
+The command executes the registered recipe only through that checkpoint and writes an `opencode-terminal-frame-v1` artifact. Only flows in `apps/catalog/scenarios/index.ts` are replayable. Browse-only flows and screen cards copy standalone capture IDs instead; do not invent a flow prefix. Use current OpenCode `v2` unless the task explicitly requires the source revision shown by the selected capture set.
 
 To compare a committed local OpenCode branch against current v2 across every catalog state:
 
