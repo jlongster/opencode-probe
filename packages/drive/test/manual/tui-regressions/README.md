@@ -65,3 +65,18 @@ OPENCODE_DRIVE_OUTAGE_MS=20000 bun run --cwd packages/drive drive start \
 ```
 
 The desired invariant is that the TUI remains alive and returns to an actionable composer after the service relaunches. Current V2 passes with both 20-second and 60-second isolated outages. Increase the outage to model slower update election and cold location startup.
+
+## Seeded lifecycle simulation
+
+`lifecycle-properties.ts` selects deterministic response lifecycle transitions and runs shared invariants after every step. A failure preserves its seed, action trace, and terminal frame in `state-machine-failure.json`:
+
+```sh
+OPENCODE_DRIVE_SEED=42 OPENCODE_DRIVE_STEPS=20 \
+  bun run --cwd packages/drive drive start --name tui-lifecycle-properties \
+  --script test/manual/tui-regressions/lifecycle-properties.ts \
+  --dev "$OPENCODE_DEV"
+```
+
+Re-run a failure with the same seed and step count. The transition set covers successful responses, user interruption, and provider disconnects. Shared invariants require the latest prompt and output to remain visible, the server projection to retain the prompt, pending input to settle, the composer to become actionable, and internal transport defects to stay out of the UI.
+
+Interruption uses the existing `llm.pending` simulation capability. If OpenCode rejects a response write after terminating the invocation, Drive confirms that the invocation is no longer pending and settles the response as externally terminated. If the invocation remains pending or the query fails, Drive preserves the original write failure.
