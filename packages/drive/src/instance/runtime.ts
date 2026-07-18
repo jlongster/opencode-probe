@@ -1,4 +1,5 @@
 import { join, resolve } from "node:path"
+import * as Config from "effect/Config"
 import * as Data from "effect/Data"
 import * as Effect from "effect/Effect"
 import * as Exit from "effect/Exit"
@@ -117,6 +118,9 @@ export const make = Effect.fn("OpenCodeInstance.make")(function* (
     backend: `ws://127.0.0.1:${yield* freePort}`,
   }
   const toolController = yield* ToolController.make(options.tools)
+  const database = yield* Config.string("OPENCODE_DRIVE_DB").pipe(
+    Config.withDefault(":memory:"),
+  )
   const setup = ToolController.composeSetup(toolController, options.tools, options.setup)
   if (
     options.project !== undefined ||
@@ -142,10 +146,7 @@ export const make = Effect.fn("OpenCodeInstance.make")(function* (
     OPENCODE_DRIVE_RENDERER: options.visible ? "visible" : "headless",
     OPENCODE_DRIVE_MEDIA_DIR: media,
     OPENCODE_CONFIG_DIR: join(files, ".opencode"),
-    // Default to an ephemeral database; OPENCODE_DRIVE_DB opts a run into a
-    // file-backed database (relative paths land in the run's data dir) so
-    // restart scenarios can exercise durable session recovery.
-    OPENCODE_DB: process.env.OPENCODE_DRIVE_DB ?? ":memory:",
+    OPENCODE_DB: database,
     OPENCODE_LOG_LEVEL: !options.visible ? "DEBUG" : process.env.OPENCODE_LOG_LEVEL,
     OPENCODE_TEST_HOME: artifacts,
     XDG_CACHE_HOME: join(artifacts, "home", ".cache"),

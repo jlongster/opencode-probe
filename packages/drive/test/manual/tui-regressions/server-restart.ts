@@ -1,10 +1,11 @@
 import { defineScript, Llm } from "../../../src/index.js"
-import { Effect } from "effect"
+import { Config, Effect } from "effect"
 
 export default defineScript({
   launch: "manual",
   run: ({ server, tuis, llm, artifacts }) =>
     Effect.gen(function* () {
+      yield* Config.string("OPENCODE_DRIVE_DB")
       yield* server.launch()
       const tui = yield* tuis.launch("restart-regression")
 
@@ -21,7 +22,6 @@ export default defineScript({
         Bun.write(`${artifacts}/after-restart.frame.json`, JSON.stringify(frame, null, 2)),
       )
 
-      // Known failure: the reconnected TUI currently reports "Session not found".
       yield* tui.ui.waitFor("before-restart-prompt", { timeout: 5_000 })
       yield* llm.queue(Llm.text("after-restart-response"))
       yield* tui.ui.submit("after-restart-prompt")

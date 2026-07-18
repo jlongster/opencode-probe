@@ -11,6 +11,7 @@ if (role === "service" && process.env.OPENCODE_TEST_HOME)
   await Promise.all([
     Bun.write(`${process.env.OPENCODE_TEST_HOME}/service.pid`, String(process.pid)),
     Bun.write(`${process.env.OPENCODE_TEST_HOME}/service-argv.json`, JSON.stringify(process.argv.slice(2))),
+    Bun.write(`${process.env.OPENCODE_TEST_HOME}/service-db.txt`, process.env.OPENCODE_DB ?? "missing"),
   ])
 
 const screen = { value: `Fake OpenCode${role === "client" ? ` ${process.env.OPENCODE_DRIVE}` : ""}` }
