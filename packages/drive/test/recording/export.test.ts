@@ -77,7 +77,7 @@ test("exports resized recordings on a stable maximum-size canvas", async () => {
   const result = await exportRecording(timeline, output)
   const data = await readFile(output)
 
-  expect(result).toEqual({ frames: 3, durationMs: 100, width: 80, height: 80 })
+  expect(result).toEqual({ frames: 7, durationMs: 100, width: 80, height: 80 })
   expect(data.readUInt32BE(16)).toBe(80)
   expect(data.readUInt32BE(20)).toBe(80)
 })
@@ -219,8 +219,8 @@ test("rejects invalid capture font overrides", async () => {
   expect(await stderr).toContain("Failed to register capture font: /missing/capture-font.woff2")
 })
 
-if (Bun.which("ffmpeg")) {
-  test("exports the off-grid final frame in an H.264 MP4 when ffmpeg is available", async () => {
+if (Bun.which("ffmpeg") && Bun.which("ffprobe")) {
+  test("exports a 60 FPS H.264 MP4 with the off-grid final frame", async () => {
     const directory = await mkdtemp(join(tmpdir(), "drive-export-ffmpeg-test-"))
     directories.push(directory)
     const timeline = join(directory, "timeline.jsonl")
@@ -249,16 +249,28 @@ if (Bun.which("ffmpeg")) {
     )
     const output = join(directory, "video.mp4")
     const progress: number[] = []
-    const result = await exportRecording(timeline, output, {
-      fps: 5,
-      onProgress: (percent) => progress.push(percent),
-    })
+    const result = await exportRecording(timeline, output, { onProgress: (percent) => progress.push(percent) })
     const data = await readFile(output)
-    expect(result.frames).toBe(4)
+    expect(result.frames).toBe(28)
     expect(result.durationMs).toBe(450)
     expect(data.subarray(4, 8).toString()).toBe("ftyp")
     expect(data.length).toBeGreaterThan(500)
     expect(progress).toEqual([10, 20, 30, 40, 50, 60, 70, 80, 90, 100])
+
+    const probe = Bun.spawnSync([
+      "ffprobe",
+      "-v",
+      "error",
+      "-select_streams",
+      "v:0",
+      "-show_entries",
+      "stream=avg_frame_rate,duration,nb_frames",
+      "-of",
+      "default=noprint_wrappers=1:nokey=1",
+      output,
+    ])
+    expect(probe.exitCode).toBe(0)
+    expect(probe.stdout.toString().trim().split("\n")).toEqual(["60/1", "0.466667", "28"])
 
     const finalFrame = join(directory, "final.png")
     const decoded = Bun.spawnSync([

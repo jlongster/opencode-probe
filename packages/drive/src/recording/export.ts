@@ -47,12 +47,19 @@ export async function exportRecording(
     )
     progress(100)
   } else if (extension === ".mp4") {
+    const frameKeys = new WeakMap<object, number>()
+    let nextFrameKey = 0
     await encodeFrames(
       frames.map((sample) => {
         const label = header(sample.atMs)
+        let frameKey = frameKeys.get(sample.frame)
+        if (frameKey === undefined) {
+          frameKey = nextFrameKey++
+          frameKeys.set(sample.frame, frameKey)
+        }
         return {
           atMs: sample.atMs,
-          key: JSON.stringify([sample.frame, label]),
+          key: JSON.stringify([frameKey, label]),
           render: () => renderFrame(sample.frame, { cols, rows, header: label }),
         }
       }),

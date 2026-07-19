@@ -67,6 +67,7 @@ const startScoped = Effect.fn("DriveCli.startScoped")(function* (options: StartO
   }
   const responses = createResponseSettings()
   logSuccess("launching instance")
+  const log = options.visible ? (message: string) => logSuccess(message, { terminal: false }) : logSuccess
   const instance = yield* OpenCodeInstance.make({
     artifacts: initialized.artifacts,
     name: options.name,
@@ -81,7 +82,7 @@ const startScoped = Effect.fn("DriveCli.startScoped")(function* (options: StartO
     tui: script?.tuiConfig,
     setup: script?.setup,
     tools: script?.tools,
-    log: logSuccess,
+    log,
   })
   yield* Effect.acquireRelease(
     fromPromise(() =>
@@ -100,7 +101,7 @@ const startScoped = Effect.fn("DriveCli.startScoped")(function* (options: StartO
     ),
     () => fromPromise(() => unregister(options.name, process.pid)).pipe(Effect.ignore),
   )
-  return yield* lifecycle(options, instance, responses, script, scriptTooling)
+  return yield* lifecycle(options, instance, responses, script, scriptTooling, log)
 })
 
 function lifecycle(
@@ -109,10 +110,11 @@ function lifecycle(
   responses: ReturnType<typeof createResponseSettings>,
   script: ScriptDefinition | undefined,
   scriptTooling: Awaited<ReturnType<typeof prepareScriptTooling>> | undefined,
+  log: (message: string) => void,
 ) {
   return Effect.callback<void, unknown>((resume) => {
     const abort = new AbortController()
-    const promise = runLifecycle(options, instance, responses, script, scriptTooling, abort.signal)
+    const promise = runLifecycle(options, instance, responses, script, scriptTooling, log, abort.signal)
     void promise.then(
       () => resume(Effect.void),
       (error) => resume(Effect.fail(error)),
@@ -130,6 +132,7 @@ async function runLifecycle(
   responses: ReturnType<typeof createResponseSettings>,
   script: ScriptDefinition | undefined,
   scriptTooling: Awaited<ReturnType<typeof prepareScriptTooling>> | undefined,
+  log: (message: string) => void,
   signal: AbortSignal,
 ) {
   let completed = false
@@ -201,11 +204,14 @@ async function runLifecycle(
             script,
             (path) => screenshots.push(path),
             (path) => recordings.push(path),
+            log,
           )
           await current.ready
           driveReady = true
           await markReady(options.name, process.pid)
-          await logReadyPaths(instance.artifacts)
+          await logReadyPaths(instance.artifacts, {
+            terminal: !options.visible,
+          })
           return output
         })().finally(() => {
           restarting = undefined
@@ -227,12 +233,13 @@ async function runLifecycle(
       script,
       (path) => screenshots.push(path),
       (path) => recordings.push(path),
+      log,
     )
     await current.ready
     driveReady = true
-    logSuccess(`ready ${options.name}`)
+    log(`ready ${options.name}`)
     await markReady(options.name, process.pid)
-    await logReadyPaths(instance.artifacts)
+    await logReadyPaths(instance.artifacts, { terminal: !options.visible })
     if (options.visible) {
       while (true) {
         const active: NonNullable<typeof current> = current
@@ -445,6 +452,7 @@ function run(
   driveScript: ScriptDefinition | undefined,
   onScreenshot: (path: string) => void,
   onRecording: (path: string) => void,
+  log: (message: string) => void,
 ) {
   const abort = new AbortController()
   const readiness = Promise.withResolvers<void>()
@@ -456,12 +464,12 @@ function run(
   }
   const promise = (async () => {
     if (!driveScript) {
-      logSuccess("waiting for OpenCode")
+      log("waiting for OpenCode")
       await runEffect(instance.waitForDrive("both"))
-      logSuccess("OpenCode ready")
+      log("OpenCode ready")
     }
     if (driveScript) {
-      logSuccess("running script")
+      log("running script")
       const exit = await Effect.runPromiseExit(
         Effect.scoped(
           runScript(
@@ -479,7 +487,7 @@ function run(
         throw Cause.squash(exit.cause)
       }
       ready()
-      logSuccess("script completed")
+      log("script completed")
       return
     }
     const child = await runEffect(instance.primary)

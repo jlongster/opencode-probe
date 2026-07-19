@@ -24,7 +24,7 @@ export async function replayRecording(path: string, options: ReplayOptions = {})
 
 export async function replay(path: string, options: InternalReplayOptions = {}): Promise<SampledFrame[]> {
   options.signal?.throwIfAborted()
-  const interval = sampleInterval(options.fps ?? 20)
+  const interval = sampleInterval(options.fps ?? 60)
   if (options.startAtMs !== undefined && (!Number.isFinite(options.startAtMs) || options.startAtMs < 0))
     throw new Error("startAtMs must be a non-negative finite number")
   if (options.durationMs !== undefined && (!Number.isFinite(options.durationMs) || options.durationMs < 0))
@@ -41,6 +41,7 @@ export async function replay(path: string, options: InternalReplayOptions = {}):
   const endAt = options.durationMs === undefined ? Number.POSITIVE_INFINITY : startAt + options.durationMs
   let nextSample = startAt
   let finalAt = 0
+  let snapshot = terminal.snapshot()
 
   for (;;) {
     const next = await records.next()
@@ -53,22 +54,27 @@ export async function replay(path: string, options: InternalReplayOptions = {}):
       break
     }
     while (nextSample < event.at_ms && nextSample <= endAt) {
-      frames.push({ atMs: nextSample, frame: terminal.snapshot() })
+      frames.push({ atMs: nextSample, frame: snapshot })
       nextSample += interval
     }
     if (event.type === "output") terminal.write(Buffer.from(event.data, "base64"))
     else terminal.resize(event.cols, event.rows)
+    snapshot = terminal.snapshot()
     finalAt = event.at_ms
   }
   terminal.finish()
+  snapshot = terminal.snapshot()
 
   const targetFinal = options.durationMs === undefined ? Math.max(startAt, finalAt) : endAt
   while (nextSample <= targetFinal) {
-    frames.push({ atMs: nextSample, frame: terminal.snapshot() })
+    frames.push({ atMs: nextSample, frame: snapshot })
     nextSample += interval
   }
-  if (frames.length === 0 || frames.at(-1)!.atMs !== targetFinal) {
-    frames.push({ atMs: targetFinal, frame: terminal.snapshot() })
+  const final = frames.at(-1)
+  if (final && Math.abs(final.atMs - targetFinal) < 0.000_001) {
+    frames[frames.length - 1] = { ...final, atMs: targetFinal }
+  } else {
+    frames.push({ atMs: targetFinal, frame: snapshot })
   }
   if (options.startAtMs !== undefined) {
     return frames.map((sample) => ({ ...sample, atMs: sample.atMs - startAt }))
