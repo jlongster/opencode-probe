@@ -3,6 +3,14 @@
   "generatedBy": "scripts/capture-opencode-drive.ts",
   "variants": [
     {
+      "id": "f05d2ab551fb",
+      "label": "f05d2ab",
+      "source": "opencode",
+      "revision": "f05d2ab551fbfcc47ecdac0c5541a1af9a769a8d",
+      "ref": "f05d2ab551fbfcc47ecdac0c5541a1af9a769a8d",
+      "committedAt": "2026-07-19T16:32:32Z"
+    },
+    {
       "id": "5d5b33f195cc",
       "label": "5d5b33f",
       "source": "opencode-v2-latest",
@@ -35,6 +43,12 @@
       "category": "system",
       "frames": [
         {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/home.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
+        {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/home.frame.json",
           "cols": 118,
@@ -59,6 +73,12 @@
       "title": "Command palette",
       "category": "navigation",
       "frames": [
+        {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/command-palette.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
         {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/command-palette.frame.json",
@@ -85,6 +105,12 @@
       "category": "picker",
       "frames": [
         {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/model-picker.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
+        {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/model-picker.frame.json",
           "cols": 118,
@@ -109,6 +135,12 @@
       "title": "Agent picker",
       "category": "picker",
       "frames": [
+        {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/agent-picker.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
         {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/agent-picker.frame.json",
@@ -135,6 +167,12 @@
       "category": "picker",
       "frames": [
         {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/integration-picker.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
+        {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/integration-picker.frame.json",
           "cols": 118,
@@ -159,6 +197,12 @@
       "title": "Theme picker",
       "category": "picker",
       "frames": [
+        {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/theme-picker.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
         {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/theme-picker.frame.json",
@@ -185,6 +229,12 @@
       "category": "status",
       "frames": [
         {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/mcp-list.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
+        {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/mcp-list.frame.json",
           "cols": 118,
@@ -209,6 +259,12 @@
       "title": "Status",
       "category": "status",
       "frames": [
+        {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/status.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
         {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/status.frame.json",
@@ -235,6 +291,12 @@
       "category": "information",
       "frames": [
         {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/debug.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
+        {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/debug.frame.json",
           "cols": 118,
@@ -259,6 +321,12 @@
       "title": "Help",
       "category": "information",
       "frames": [
+        {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/help.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
         {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/help.frame.json",
@@ -285,6 +353,12 @@
       "category": "information",
       "frames": [
         {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/pair.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
+        {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/pair.frame.json",
           "cols": 118,
@@ -309,6 +383,12 @@
       "title": "Session picker",
       "category": "session",
       "frames": [
+        {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/session-picker.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
         {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/session-picker.frame.json",
@@ -335,6 +415,12 @@
       "category": "session",
       "frames": [
         {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/skill-picker.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
+        {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/skill-picker.frame.json",
           "cols": 118,
@@ -359,6 +445,12 @@
       "title": "Patch input streaming",
       "category": "session",
       "frames": [
+        {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/patch-input-streaming.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
         {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/patch-input-streaming.frame.json",
@@ -385,6 +477,12 @@
       "category": "session",
       "frames": [
         {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/permission-prompt.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
+        {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/permission-prompt.frame.json",
           "cols": 118,
@@ -409,6 +507,12 @@
       "title": "Patch succeeded",
       "category": "session",
       "frames": [
+        {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/patch-success.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
         {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/patch-success.frame.json",
@@ -435,6 +539,12 @@
       "category": "session",
       "frames": [
         {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/session-rename.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
+        {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/session-rename.frame.json",
           "cols": 118,
@@ -459,6 +569,12 @@
       "title": "Fork session",
       "category": "session",
       "frames": [
+        {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/session-fork.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
         {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/session-fork.frame.json",
@@ -485,6 +601,12 @@
       "category": "session",
       "frames": [
         {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/session-export.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
+        {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/session-export.frame.json",
           "cols": 118,
@@ -509,6 +631,12 @@
       "title": "Question prompt",
       "category": "session",
       "frames": [
+        {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/question-prompt.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
         {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/question-prompt.frame.json",
@@ -535,6 +663,12 @@
       "category": "session",
       "frames": [
         {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/session-picker-populated.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
+        {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/session-picker-populated.frame.json",
           "cols": 118,
@@ -559,6 +693,12 @@
       "title": "Success toast",
       "category": "system",
       "frames": [
+        {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/toast-success.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
         {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/toast-success.frame.json",
@@ -585,6 +725,12 @@
       "category": "session",
       "frames": [
         {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/diff-viewer.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
+        {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/diff-viewer.frame.json",
           "cols": 118,
@@ -610,6 +756,12 @@
       "category": "session",
       "frames": [
         {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/thinking-streaming.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
+        {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/thinking-streaming.frame.json",
           "cols": 118,
@@ -622,6 +774,12 @@
       "title": "Shell input streaming",
       "category": "session",
       "frames": [
+        {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/shell-input-streaming.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
         {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/shell-input-streaming.frame.json",
@@ -636,6 +794,12 @@
       "category": "session",
       "frames": [
         {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/shell-output-streaming.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
+        {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/shell-output-streaming.frame.json",
           "cols": 118,
@@ -648,6 +812,12 @@
       "title": "Shell execution succeeded",
       "category": "session",
       "frames": [
+        {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/shell-execute-succeeded.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
         {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/shell-execute-succeeded.frame.json",
@@ -662,6 +832,12 @@
       "category": "session",
       "frames": [
         {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/shell-execute-failed.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
+        {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/shell-execute-failed.frame.json",
           "cols": 118,
@@ -674,6 +850,12 @@
       "title": "Glob finds files",
       "category": "session",
       "frames": [
+        {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/glob-success.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
         {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/glob-success.frame.json",
@@ -688,6 +870,12 @@
       "category": "session",
       "frames": [
         {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/glob-empty.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
+        {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/glob-empty.frame.json",
           "cols": 118,
@@ -700,6 +888,12 @@
       "title": "Grouped project exploration",
       "category": "session",
       "frames": [
+        {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/grouped-exploration.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
         {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/grouped-exploration.frame.json",
@@ -714,6 +908,12 @@
       "category": "session",
       "frames": [
         {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/grep-success.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
+        {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/grep-success.frame.json",
           "cols": 118,
@@ -726,6 +926,12 @@
       "title": "Grep finds no matches",
       "category": "session",
       "frames": [
+        {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/grep-empty.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
         {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/grep-empty.frame.json",
@@ -740,6 +946,12 @@
       "category": "session",
       "frames": [
         {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/grep-failure.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
+        {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/grep-failure.frame.json",
           "cols": 118,
@@ -752,6 +964,12 @@
       "title": "WebFetch streaming",
       "category": "session",
       "frames": [
+        {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/webfetch-streaming.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
         {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/webfetch-streaming.frame.json",
@@ -766,6 +984,12 @@
       "category": "session",
       "frames": [
         {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/webfetch-success.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
+        {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/webfetch-success.frame.json",
           "cols": 118,
@@ -778,6 +1002,12 @@
       "title": "WebSearch running",
       "category": "session",
       "frames": [
+        {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/websearch-running.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
         {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/websearch-running.frame.json",
@@ -792,6 +1022,12 @@
       "category": "session",
       "frames": [
         {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/websearch-failure.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
+        {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/websearch-failure.frame.json",
           "cols": 118,
@@ -804,6 +1040,12 @@
       "title": "Question input streaming",
       "category": "session",
       "frames": [
+        {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/question-input-streaming.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
         {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/question-input-streaming.frame.json",
@@ -818,6 +1060,12 @@
       "category": "session",
       "frames": [
         {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/question-awaiting-form.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
+        {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/question-awaiting-form.frame.json",
           "cols": 118,
@@ -830,6 +1078,12 @@
       "title": "Question review",
       "category": "session",
       "frames": [
+        {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/question-review.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
         {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/question-review.frame.json",
@@ -844,6 +1098,12 @@
       "category": "session",
       "frames": [
         {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/question-succeeded.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
+        {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/question-succeeded.frame.json",
           "cols": 118,
@@ -856,6 +1116,12 @@
       "title": "Question denied",
       "category": "session",
       "frames": [
+        {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/question-denied.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
         {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/question-denied.frame.json",
@@ -870,6 +1136,12 @@
       "category": "session",
       "frames": [
         {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/patch-created.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
+        {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/patch-created.frame.json",
           "cols": 118,
@@ -882,6 +1154,12 @@
       "title": "Patch updated file",
       "category": "session",
       "frames": [
+        {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/patch-updated.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
         {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/patch-updated.frame.json",
@@ -896,6 +1174,12 @@
       "category": "session",
       "frames": [
         {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/patch-deleted.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
+        {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/patch-deleted.frame.json",
           "cols": 118,
@@ -908,6 +1192,12 @@
       "title": "Patch failed",
       "category": "session",
       "frames": [
+        {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/patch-failed.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
         {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/patch-failed.frame.json",
@@ -922,6 +1212,12 @@
       "category": "session",
       "frames": [
         {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/assistant-response-succeeded.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
+        {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/assistant-response-succeeded.frame.json",
           "cols": 118,
@@ -934,6 +1230,12 @@
       "title": "Assistant response failed",
       "category": "session",
       "frames": [
+        {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/assistant-response-failed.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
         {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/assistant-response-failed.frame.json",
@@ -948,6 +1250,12 @@
       "category": "session",
       "frames": [
         {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/assistant-response-interrupted.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
+        {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/assistant-response-interrupted.frame.json",
           "cols": 118,
@@ -960,6 +1268,12 @@
       "title": "Read input streaming",
       "category": "session",
       "frames": [
+        {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/read-input-streaming.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
         {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/read-input-streaming.frame.json",
@@ -974,6 +1288,12 @@
       "category": "session",
       "frames": [
         {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/read-permission.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
+        {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/read-permission.frame.json",
           "cols": 118,
@@ -986,6 +1306,12 @@
       "title": "Read succeeded",
       "category": "session",
       "frames": [
+        {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/read-succeeded.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
         {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/read-succeeded.frame.json",
@@ -1000,6 +1326,12 @@
       "category": "session",
       "frames": [
         {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/read-denied.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
+        {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/read-denied.frame.json",
           "cols": 118,
@@ -1012,6 +1344,12 @@
       "title": "Subagent running",
       "category": "session",
       "frames": [
+        {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/subagent-running.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
         {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/subagent-running.frame.json",
@@ -1026,6 +1364,12 @@
       "category": "session",
       "frames": [
         {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/subagent-completed.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
+        {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/subagent-completed.frame.json",
           "cols": 118,
@@ -1038,6 +1382,12 @@
       "title": "Subagent session",
       "category": "session",
       "frames": [
+        {
+          "variantId": "f05d2ab551fb",
+          "src": "captures/f05d2ab551fb/subagent-session.frame.json",
+          "cols": 118,
+          "rows": 34
+        },
         {
           "variantId": "5d5b33f195cc",
           "src": "captures/5d5b33f195cc/subagent-session.frame.json",
