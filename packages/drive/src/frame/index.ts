@@ -62,6 +62,17 @@ export const BlockGlyphs: Record<string, GlyphRect> = {
   "╹": { x: CellWidth / 2 - 1, y: 0, width: 2, height: CellHeight / 2, stretch: false },
 }
 
+const diagonalBlockGlyphs: Record<string, ReadonlyArray<Omit<GlyphRect, "stretch">>> = {
+  "▚": [
+    { x: 0, y: 0, width: CellWidth / 2, height: CellHeight / 2 },
+    { x: CellWidth / 2, y: CellHeight / 2, width: CellWidth / 2, height: CellHeight / 2 },
+  ],
+  "▞": [
+    { x: CellWidth / 2, y: 0, width: CellWidth / 2, height: CellHeight / 2 },
+    { x: 0, y: CellHeight / 2, width: CellWidth / 2, height: CellHeight / 2 },
+  ],
+}
+
 /**
  * Draws a block/bar glyph geometrically. Returns false when the character is
  * not a geometric primitive and must be drawn with fonts instead.
@@ -76,11 +87,17 @@ export const drawBlockGlyph = (
   cells = 1,
 ): boolean => {
   const glyph = BlockGlyphs[char]
-  if (glyph === undefined) return false
-  const width = glyph.stretch
-    ? glyph.width + (cells - 1) * CellWidth
-    : glyph.width
-  context.fillRect(x + glyph.x, y + glyph.y, width, glyph.height)
+  if (glyph !== undefined) {
+    const width = glyph.stretch
+      ? glyph.width + (cells - 1) * CellWidth
+      : glyph.width
+    context.fillRect(x + glyph.x, y + glyph.y, width, glyph.height)
+    return true
+  }
+  const quadrants = diagonalBlockGlyphs[char]
+  if (quadrants === undefined) return false
+  for (const quadrant of quadrants)
+    context.fillRect(x + quadrant.x, y + quadrant.y, quadrant.width, quadrant.height)
   return true
 }
 

@@ -35,6 +35,22 @@ describe("frame geometry", () => {
     ])
   })
 
+  it("draws diagonal quadrant blocks edge-to-edge", () => {
+    const rects: Array<readonly [number, number, number, number]> = []
+    const context = {
+      fillRect: (x: number, y: number, width: number, height: number) =>
+        void rects.push([x, y, width, height]),
+    }
+    expect(drawBlockGlyph(context, "▚", 0, 0)).toBe(true)
+    expect(drawBlockGlyph(context, "▞", CellWidth, 0)).toBe(true)
+    expect(rects).toEqual([
+      [0, 0, CellWidth / 2, CellHeight / 2],
+      [CellWidth / 2, CellHeight / 2, CellWidth / 2, CellHeight / 2],
+      [CellWidth + CellWidth / 2, 0, CellWidth / 2, CellHeight / 2],
+      [CellWidth, CellHeight / 2, CellWidth / 2, CellHeight / 2],
+    ])
+  })
+
   it("uses distinct attribute bits", () => {
     const bits = Object.values(TextStyle)
     expect(new Set(bits).size).toBe(bits.length)
