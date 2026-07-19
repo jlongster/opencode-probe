@@ -1,5 +1,11 @@
 # opencode-drive
 
+## 1.3.0
+
+### Minor Changes
+
+- 7caebeb: Expose semantic UI snapshots, exact semantic node polling, and safe semantic-node clicks for compatible OpenCode endpoints.
+
 ## 1.2.0
 
 ### Minor Changes
