@@ -23,7 +23,7 @@ Make the Effect-native driver the single owner of OpenCode Drive lifecycle behav
 1. Correct the skill's targeted prune example to use the instance name.
 2. Preserve the final off-grid terminal state in MP4 output and add encoded-output regression coverage.
 3. Add the project MIT license and explicit Bun runtime metadata/documentation.
-4. Keep `0.5.0` unpublished until the consolidation and release validation pass.
+4. Publish `0.5.0` only after the consolidation and release validation pass.
 
 ## Phase 1: Deterministic Configuration
 

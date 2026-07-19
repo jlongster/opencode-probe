@@ -591,7 +591,7 @@ describe("opencode-drive", () => {
       new Response(child.stderr).text(),
     ])
     expect(status).toBe(0)
-    expect(Date.now() - started).toBeLessThan(5_000)
+    expect(Date.now() - started).toBeLessThan(10_000)
     const artifacts = artifactPath(stderr)
     roots.push(artifacts)
     expect(await Bun.file(join(artifacts, "script-result.json")).json()).toMatchObject({

@@ -1,5 +1,19 @@
 # opencode-drive
 
+## 1.1.0
+
+### Minor Changes
+
+- fad9f96: Allow scripts and library drivers to intercept declared tools and control concurrent invocations by call ID at runtime.
+
+### Patch Changes
+
+- 63d3464: Keep service and progress output out of visible TUI sessions and avoid reinstalling the OpenTUI preload package for development checkouts.
+- fd45cfe: Allow Drive runs to select a durable OpenCode database with the Effect-configured `OPENCODE_DRIVE_DB` setting while retaining `:memory:` as the default.
+- e66adc1: Preserve recorded frame timing during MP4 encoding and reduce work for dense or unchanged terminal output.
+- e7dff5f: Render diagonal quadrant block glyphs as exact terminal cell geometry in screenshots, recordings, and catalog frames.
+- 63d3464: Export recordings at 60 FPS by default and preserve the requested frame rate in generated MP4 files.
+
 ## 1.0.0
 
 ### Major Changes
