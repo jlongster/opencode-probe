@@ -1,5 +1,11 @@
 # opencode-drive
 
+## 1.2.0
+
+### Minor Changes
+
+- 4e0c002: Write screenshots and recordings beneath run- and restart-scoped media directories so named outputs cannot overwrite earlier runs.
+
 ## 1.1.0
 
 ### Minor Changes
