@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import { basename, dirname, join, resolve } from "node:path"
 import {
   controlPath,
+  initializeManifest,
   listInstances,
   manifestPath,
   register,
@@ -113,7 +114,6 @@ describe("opencode-drive", () => {
     const [initStatus, initOutput] = await Promise.all([initialized.exited, new Response(initialized.stdout).text()])
     expect(initStatus).toBe(0)
     const artifacts = initOutput.trim()
-    roots.push(artifacts)
     expect(await Bun.file(join(artifacts, "files", ".opencode", "opencode.jsonc")).exists()).toBe(true)
     expect(await Bun.file(join(artifacts, "files", ".opencode", "opencode.jsonc")).json()).toMatchObject({
       model: "simulation/gpt-sim-model",
@@ -174,7 +174,6 @@ describe("opencode-drive", () => {
     instances.push({ root, name })
 
     const manifest = await Bun.file(join(root, "registry", `${name}.json`)).json()
-    roots.push(manifest.artifacts)
     expect(manifest.visible).toBe(false)
     expect(manifest.endpoints.ui).toMatch(/^ws:\/\/127\.0\.0\.1:\d+$/)
     expect(manifest.endpoints.backend).toMatch(/^ws:\/\/127\.0\.0\.1:\d+$/)
@@ -255,14 +254,22 @@ describe("opencode-drive", () => {
     const root = await temporary()
     const name = "exited-recording-test"
     const started = spawn(
-      ["start", "--name", name, "--record", "--", process.execPath, fixture("fake-opencode.ts"), "500"],
+      [
+        "start",
+        "--name",
+        name,
+        "--record",
+        "--",
+        process.execPath,
+        fixture("fake-opencode.ts"),
+        "exit-after-attach",
+      ],
       root,
     )
     const [status, stderr] = await Promise.all([started.exited, new Response(started.stderr).text()])
-    expect(status).toBe(0)
+    expect(status, stderr).toBe(0)
     const artifacts = stderr.match(/opencode-drive: using artifacts (.+)/)?.[1]
     expect(artifacts).toBeDefined()
-    roots.push(artifacts!)
 
     const deadline = Date.now() + 10_000
     while (await Bun.file(join(root, "registry", `${name}.json`)).exists()) {
@@ -284,7 +291,6 @@ describe("opencode-drive", () => {
     ).toBe(0)
     instances.push({ root, name })
     const manifest = await Bun.file(join(root, "registry", `${name}.json`)).json()
-    roots.push(manifest.artifacts)
     const drive = await Bun.file(join(manifest.artifacts, "drive", `${name}.json`)).json()
     expect(drive.recording).toBeUndefined()
 
@@ -308,16 +314,11 @@ describe("opencode-drive", () => {
     expect(stderr).toContain(`drive instance "${name}" is already running`)
   })
 
-  test("only the owning detached launcher reports concurrent startup success", async () => {
-    const root = await temporary()
-    const name = "concurrent-start"
-    const args = ["start", "--name", name, "--", process.execPath, fixture("fake-opencode.ts")]
-    const children = [spawn(args, root), spawn(args, root)]
-    expect((await Promise.all(children.map((child) => child.exited))).sort()).toEqual([0, 1])
-    const manifest = await Bun.file(join(root, "registry", `${name}.json`)).json()
-    roots.push(manifest.artifacts)
-    instances.push({ root, name })
-  })
+  test("only the owning detached launcher starts an automatic instance", () =>
+    expectSingleConcurrentStart(false), 75_000)
+
+  test("only the owning detached launcher starts a prepared instance", () =>
+    expectSingleConcurrentStart(true), 75_000)
 
   test("registers only one concurrent owner for a name", async () => {
     const root = await temporary()
@@ -328,6 +329,94 @@ describe("opencode-drive", () => {
       ])
       expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1)
       expect(results.filter((result) => result.status === "rejected")).toHaveLength(1)
+    })
+  })
+
+  test("transfers temporary initialization only to its declared daemon", async () => {
+    const root = await temporary()
+    const owner = Bun.spawn([
+      process.execPath,
+      "-e",
+      "await Bun.sleep(60_000)",
+    ])
+    try {
+      await withRegistry(root, async () => {
+        const name = "temporary-owner"
+        const artifacts = join(root, "artifacts")
+        await mkdir(join(root, "registry"), { recursive: true })
+        await Bun.write(
+          manifestPath(name),
+          `${JSON.stringify({
+            version: 1,
+            name,
+            createdAt: new Date().toISOString(),
+            cwd: root,
+            artifacts,
+            status: "initialized",
+            temporary: true,
+            pid: owner.pid,
+          })}\n`,
+        )
+        const create = async () => {
+          throw new Error("existing initialization was replaced")
+        }
+
+        await expect(
+          initializeManifest(name, root, create, { temporary: true }),
+        ).rejects.toThrow(`drive instance "${name}" is already starting`)
+        owner.kill()
+        await owner.exited
+        expect(
+          await initializeManifest(name, root, create, {
+            temporary: true,
+            adoptPid: owner.pid,
+          }),
+        ).toMatchObject({ pid: process.pid, artifacts })
+        await expect(register(testManifest(name, owner.pid))).rejects.toThrow(
+          `drive instance "${name}" changed ownership`,
+        )
+      })
+    } finally {
+      if (owner.exitCode === null) owner.kill()
+      await owner.exited
+    }
+  })
+
+  test("preserves prepared artifacts when reclaiming a dead launcher", async () => {
+    const root = await temporary()
+    await withRegistry(root, async () => {
+      const name = "prepared-owner"
+      const artifacts = join(root, "prepared-artifacts")
+      await mkdir(join(root, "registry"), { recursive: true })
+      await Bun.write(
+        manifestPath(name),
+        `${JSON.stringify({
+          version: 1,
+          name,
+          createdAt: new Date().toISOString(),
+          cwd: root,
+          artifacts,
+          status: "initialized",
+          pid: 2_000_000_000,
+        })}\n`,
+      )
+
+      const create = async () => {
+        throw new Error("prepared artifacts were replaced")
+      }
+      const released = await initializeManifest(name, root, create)
+      expect(released).toMatchObject({ artifacts })
+      expect("pid" in released).toBe(false)
+      expect("pid" in await Bun.file(manifestPath(name)).json()).toBe(false)
+
+      const reclaimed = await initializeManifest(
+        name,
+        root,
+        create,
+        { temporary: true },
+      )
+      expect(reclaimed).toMatchObject({ pid: process.pid, artifacts })
+      expect("temporary" in reclaimed).toBe(false)
     })
   })
 
@@ -590,7 +679,6 @@ describe("opencode-drive", () => {
     instances.push(...names.map((name) => ({ root, name })))
     const first = await Bun.file(join(root, "registry", "first.json")).json()
     const second = await Bun.file(join(root, "registry", "second.json")).json()
-    roots.push(first.artifacts, second.artifacts)
     expect(first.endpoints.ui).not.toBe(second.endpoints.ui)
     expect(await spawn(["send", "--name", "first", "--command.ui.state"], root).exited).toBe(0)
     expect(await spawn(["send", "--name", "second", "--command.ui.state"], root).exited).toBe(0)
@@ -650,13 +738,11 @@ describe("opencode-drive", () => {
       new Response(backgroundStart.stderr).text(),
     ])
     expect(backgroundStatus).toBe(0)
-    roots.push(artifactPath(backgroundError))
     instances.push({ root, name: background })
 
     const running = spawn(["start", "--visible", "--", process.execPath, fixture("fake-opencode.ts"), "30000"], root)
     const name = `visible-${running.pid}`
     const manifest = await waitForManifest(root, name)
-    roots.push(manifest.artifacts)
     instances.push({ root, name: manifest.name })
     expect(manifest.visible).toBe(true)
 
@@ -690,7 +776,6 @@ describe("opencode-drive", () => {
     expect(status).toBe(0)
     expect(Date.now() - started).toBeLessThan(10_000)
     const artifacts = artifactPath(stderr)
-    roots.push(artifacts)
     expect(await Bun.file(join(artifacts, "script-result.json")).json()).toMatchObject({
       frame: { cols: 80, rows: 24 },
       gitWriteError: expect.stringContaining("must not modify Git metadata"),
@@ -747,7 +832,6 @@ describe("opencode-drive", () => {
     expect(await initialized.exited).toBe(0)
     const artifacts = (await new Response(initialized.stdout).text()).trim()
     const files = join(artifacts, "files")
-    roots.push(artifacts)
     await rm(join(files, ".git"), { recursive: true })
     await Bun.$`git init --quiet --initial-branch=main`.cwd(files)
     await Bun.$`git add --all`.cwd(files)
@@ -798,7 +882,6 @@ describe("opencode-drive", () => {
     const [status, stderr] = await Promise.all([child.exited, new Response(child.stderr).text()])
     expect(status).toBe(1)
     const artifacts = artifactPath(stderr)
-    roots.push(artifacts)
     expect(stderr).toContain('timed out waiting for the UI to match "this text never appears"')
     expect(await Bun.file(join(root, "registry", `${name}.json`)).exists()).toBe(false)
   }, 10_000)
@@ -822,7 +905,6 @@ describe("opencode-drive", () => {
     const [status, stderr] = await Promise.all([child.exited, new Response(child.stderr).text()])
     expect(status).toBe(1)
     const artifacts = artifactPath(stderr)
-    roots.push(artifacts)
     expect(stderr).toContain("script crashed")
     expect(await Bun.file(join(root, "registry", `${name}.json`)).exists()).toBe(false)
     const pid = Number(await Bun.file(join(artifacts, "child.pid")).text())
@@ -917,7 +999,6 @@ describe("opencode-drive", () => {
     expect(await child.exited).toBe(0)
     const error = await stderr
     const artifacts = artifactPath(error)
-    roots.push(artifacts)
     expect(await Bun.file(join(artifacts, "manual-clients.json")).json()).toEqual({
       apiHealthy: true,
       aliceFrame: { cols: 80, rows: 24 },
@@ -949,7 +1030,6 @@ describe("opencode-drive", () => {
     const stderr = new Response(child.stderr).text()
     expect(await child.exited).toBe(0)
     const artifacts = artifactPath(await stderr)
-    roots.push(artifacts)
     const events = (await Bun.file(join(artifacts, "tool-control-events.jsonl")).text())
       .trim()
       .split("\n")
@@ -977,7 +1057,6 @@ describe("opencode-drive", () => {
     )
     const stderr = new Response(child.stderr).text()
     expect(await child.exited).toBe(0)
-    roots.push(artifactPath(await stderr))
   }, 60_000)
 
   test("kills and relaunches the scripted server and TUIs", async () => {
@@ -999,7 +1078,6 @@ describe("opencode-drive", () => {
     expect(await child.exited).toBe(0)
     const error = await stderr
     const artifacts = artifactPath(error)
-    roots.push(artifacts)
     const result = await Bun.file(join(artifacts, "kill-server-result.json")).json()
     expect(Number.isInteger(result.firstServer)).toBe(true)
     expect(Number.isInteger(result.secondServer)).toBe(true)
@@ -1032,7 +1110,6 @@ describe("opencode-drive", () => {
     const stderr = new Response(child.stderr).text()
     expect(await child.exited).toBe(0)
     const artifacts = artifactPath(await stderr)
-    roots.push(artifacts)
     const result = await Bun.file(join(artifacts, "failed-launch-retry.json")).json()
     expect(Number.isInteger(result.firstPid)).toBe(true)
     expect(Number.isInteger(result.secondPid)).toBe(true)
@@ -1066,7 +1143,6 @@ describe("opencode-drive", () => {
     const stderr = new Response(child.stderr).text()
     expect(await child.exited).toBe(0)
     const artifacts = artifactPath(await stderr)
-    roots.push(artifacts)
     expect(await Bun.file(join(artifacts, "tui-options.json")).json()).toEqual({
       primaryRecording: true,
       secondaryRecording: false,
@@ -1205,7 +1281,6 @@ describe("opencode-drive", () => {
       const stderr = new Response(child.stderr).text()
       expect(await child.exited).toBe(0)
       const artifacts = artifactPath(await stderr)
-      roots.push(artifacts)
       const events = (await Bun.file(join(artifacts, "backend-events.jsonl")).text())
         .trim()
         .split("\n")
@@ -1240,7 +1315,6 @@ describe("opencode-drive", () => {
     const stderr = new Response(child.stderr).text()
     expect(await child.exited).toBe(0)
     const artifacts = artifactPath(await stderr)
-    roots.push(artifacts)
     const events = (await Bun.file(join(artifacts, "backend-events.jsonl")).text())
       .trim()
       .split("\n")
@@ -1303,7 +1377,6 @@ describe("opencode-drive", () => {
       root,
     )
     const manifest = await waitForManifest(root, name)
-    roots.push(manifest.artifacts)
     await waitForLines(join(manifest.artifacts, "script-runs.txt"), 1)
 
     expect(await spawn(["restart", "--name", name], root).exited).toBe(0)
@@ -1364,7 +1437,6 @@ describe("opencode-drive", () => {
       root,
     )
     const manifest = await waitForManifest(root, name)
-    roots.push(manifest.artifacts)
     const openCodePid = Number(await Bun.file(join(manifest.artifacts, "child.pid")).text())
 
     process.kill(child.pid, "SIGTERM")
@@ -1395,7 +1467,6 @@ describe("opencode-drive", () => {
       root,
     )
     const manifest = await waitForManifest(root, name)
-    roots.push(manifest.artifacts)
 
     process.kill(child.pid, "SIGTERM")
     await child.exited
@@ -1632,9 +1703,9 @@ async function waitForLines(file: string, count: number) {
   throw new Error(`timed out waiting for ${count} lines in ${file}`)
 }
 
-async function waitForManifest(root: string, name: string) {
+async function waitForManifest(root: string, name: string, timeout = 10_000) {
   const file = join(root, "registry", `${name}.json`)
-  const deadline = Date.now() + 10_000
+  const deadline = Date.now() + timeout
   while (Date.now() < deadline) {
     const manifest = await Bun.file(file)
       .json()
@@ -1643,6 +1714,84 @@ async function waitForManifest(root: string, name: string) {
     await Bun.sleep(25)
   }
   throw new Error(`timed out waiting for ${file}`)
+}
+
+async function waitForLauncher(
+  child: ReturnType<typeof spawn>,
+  stderr: Promise<string>,
+) {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<"timeout">((resolve) => {
+    timer = setTimeout(() => resolve("timeout"), 10_000)
+  })
+  try {
+    const status = await Promise.race([child.exited, timeout])
+    if (status !== "timeout") return status
+    if (child.exitCode === null) child.kill()
+    await child.exited
+    throw new Error(
+      `launcher ${child.pid} did not exit after ownership resolved: ${await stderr}`,
+    )
+  } finally {
+    if (timer !== undefined) clearTimeout(timer)
+  }
+}
+
+async function expectSingleConcurrentStart(prepared: boolean) {
+  const root = await temporary()
+  const name = `concurrent-start-${prepared ? "prepared" : "automatic"}`
+  if (prepared) expect(await spawn(["init", "--name", name], root).exited).toBe(0)
+  const args = ["start", "--name", name, "--", process.execPath, fixture("fake-opencode.ts")]
+  const children = [spawn(args, root), spawn(args, root)]
+  const stderr = children.map((child) => new Response(child.stderr).text())
+  let managed = false
+  try {
+    const manifest = await waitForManifest(root, name, 65_000)
+    instances.push({ root, name })
+    managed = true
+    const statuses = await Promise.all(
+      children.map((child, index) => waitForLauncher(child, stderr[index]!)),
+    )
+    const errors = await Promise.all(stderr)
+    expect(statuses.sort()).toEqual([0, 1])
+    expect(errors.filter((error) => error.includes("is already starting"))).toHaveLength(1)
+    expect(errors.some((error) => error.includes("detached instance exited"))).toBe(false)
+    expect(manifest.pid).toBeGreaterThan(0)
+  } finally {
+    await Promise.all(
+      children.map(async (child) => {
+        if (child.exitCode === null) child.kill()
+        await child.exited
+      }),
+    )
+    await Promise.allSettled(stderr)
+    if (!managed) await terminateUnmanagedInstance(root, name)
+  }
+}
+
+async function terminateUnmanagedInstance(root: string, name: string) {
+  const manifest: unknown = await Bun.file(join(root, "registry", `${name}.json`))
+    .json()
+    .catch(() => undefined)
+  if (
+    typeof manifest !== "object" ||
+    manifest === null ||
+    !("pid" in manifest) ||
+    typeof manifest.pid !== "number"
+  )
+    return
+  for (const signal of ["SIGTERM", "SIGKILL"] as const) {
+    if (!running(manifest.pid)) return
+    try {
+      process.kill(manifest.pid, signal)
+    } catch (error) {
+      if (!running(manifest.pid)) return
+      throw error
+    }
+    const deadline = Date.now() + 2_000
+    while (running(manifest.pid) && Date.now() < deadline) await Bun.sleep(25)
+  }
+  if (running(manifest.pid)) throw new Error(`failed to terminate drive owner ${manifest.pid}`)
 }
 
 async function waitForMissing(file: string) {

@@ -24,6 +24,7 @@ const recordingStarted = performance.now()
 const endpoints = drive.endpoints
 let toolAttachments = 0
 let backendHandshakes = 0
+const exitAfterAttach = Promise.withResolvers<void>()
 const servicePassword = "drive-test-password"
 const api = role === "service"
   ? Bun.serve({
@@ -277,6 +278,7 @@ const backend = role === "client" ? undefined : Bun.serve({
             },
           }),
         )
+        if (process.argv.includes("exit-after-attach")) exitAfterAttach.resolve()
       }
     },
   },
@@ -294,6 +296,7 @@ await new Promise<void>((resolve) => {
   else process.once("SIGTERM", resolve)
   const lifetime = role === "service" ? Number.NaN : Number(process.argv[2])
   if (Number.isFinite(lifetime)) setTimeout(resolve, lifetime)
+  if (process.argv.includes("exit-after-attach")) void exitAfterAttach.promise.then(resolve)
 })
 await Promise.all([ui?.stop(true), backend?.stop(true)])
 

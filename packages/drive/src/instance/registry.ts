@@ -51,12 +51,24 @@ export async function initializeManifest(
   name: string,
   cwd: string,
   create: () => Promise<string>,
-  options: { readonly temporary?: boolean } = {},
+  options: {
+    readonly temporary?: boolean
+    readonly adoptPid?: number
+  } = {},
 ) {
   let initialized: InitializedManifest | undefined
   await withLock(name, false, async () => {
     let existing = await read(manifestPath(name))
     if (existing?.status === "initialized") {
+      if (
+        options.temporary &&
+        options.adoptPid !== undefined &&
+        existing.pid === options.adoptPid
+      ) {
+        initialized = { ...existing, pid: process.pid }
+        await write(initialized)
+        return
+      }
       if (!keepInitialized(existing)) {
         await Promise.all([
           rm(manifestPath(name), { force: true }),
@@ -64,10 +76,18 @@ export async function initializeManifest(
         ])
         existing = undefined
       } else {
-        initialized =
-          options.temporary && existing.temporary
-            ? { ...existing, pid: process.pid }
-            : existing
+        let available = existing
+        if (existing.pid !== undefined && existing.pid !== process.pid) {
+          if (isProcessAlive(existing.pid))
+            throw new Error(`drive instance "${name}" is already starting`)
+          const { pid: _, ...released } = existing
+          available = released
+        }
+        if (options.temporary && available.pid === undefined) {
+          initialized = { ...available, pid: process.pid }
+        } else {
+          initialized = available
+        }
         if (initialized !== existing) await write(initialized)
         return
       }
@@ -101,6 +121,12 @@ export async function register(manifest: InstanceManifest) {
   }
   await withLock(manifest.name, false, async () => {
     const existing = await read(manifestPath(manifest.name))
+    if (
+      existing?.status === "initialized" &&
+      existing.pid !== undefined &&
+      existing.pid !== manifest.pid
+    )
+      throw new Error(`drive instance "${manifest.name}" changed ownership`)
     if (existing && existing.status !== "initialized" && isProcessAlive(existing.pid))
       throw new Error(`drive instance "${manifest.name}" is already running`)
     await Promise.all([
