@@ -33,12 +33,22 @@ export const start = Effect.fn("DriveCli.start")((options: StartOptions) =>
 )
 
 const startScoped = Effect.fn("DriveCli.startScoped")(function* (options: StartOptions) {
+  const initializerPid = Number.parseInt(
+    options.daemon ? process.env.OPENCODE_DRIVE_INITIALIZER_PID ?? "" : "",
+    10,
+  )
+  if (options.daemon) delete process.env.OPENCODE_DRIVE_INITIALIZER_PID
   const initialized = yield* fromPromise(() =>
     initializeManifest(
       options.name,
       process.cwd(),
       () => initializeInstance(options.name),
-      { temporary: true },
+      {
+        temporary: true,
+        ...(Number.isInteger(initializerPid) && initializerPid > 0
+          ? { adoptPid: initializerPid }
+          : {}),
+      },
     ),
   )
   configureLogFile(initialized.artifacts)
@@ -419,6 +429,7 @@ const startDetached = Effect.fn("DriveCli.startDetached")(function* (
       ...process.env,
       OPENCODE_DRIVE_LOG: configureLogFile(artifacts),
       OPENCODE_DRIVE_OWNER_LOG: ownerLog,
+      OPENCODE_DRIVE_INITIALIZER_PID: String(process.pid),
     },
     stdin: "ignore",
     stdout: "ignore",

@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test"
 import { mkdir, mkdtemp, readdir, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { basename, dirname, join, resolve } from "node:path"
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path"
 import {
   controlPath,
+  initializeManifest,
+  isProcessAlive,
   listInstances,
   manifestPath,
   register,
@@ -27,7 +29,14 @@ afterEach(async () => {
       await spawn(["stop", "--name", name], root).exited
     }),
   )
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  const cleanup = [...new Set(roots.splice(0).map((root) => resolve(root)))].filter(
+    (root, _, all) =>
+      !all.some((parent) => {
+        const nested = relative(parent, root)
+        return nested !== "" && !nested.startsWith("..") && !isAbsolute(nested)
+      }),
+  )
+  await Promise.all(cleanup.map((root) => rm(root, { recursive: true, force: true })))
 })
 
 describe("opencode-drive", () => {
@@ -255,11 +264,20 @@ describe("opencode-drive", () => {
     const root = await temporary()
     const name = "exited-recording-test"
     const started = spawn(
-      ["start", "--name", name, "--record", "--", process.execPath, fixture("fake-opencode.ts"), "500"],
+      [
+        "start",
+        "--name",
+        name,
+        "--record",
+        "--",
+        process.execPath,
+        fixture("fake-opencode.ts"),
+        "exit-after-attach",
+      ],
       root,
     )
     const [status, stderr] = await Promise.all([started.exited, new Response(started.stderr).text()])
-    expect(status).toBe(0)
+    expect(status, stderr).toBe(0)
     const artifacts = stderr.match(/opencode-drive: using artifacts (.+)/)?.[1]
     expect(artifacts).toBeDefined()
     roots.push(artifacts!)
@@ -308,16 +326,11 @@ describe("opencode-drive", () => {
     expect(stderr).toContain(`drive instance "${name}" is already running`)
   })
 
-  test("only the owning detached launcher reports concurrent startup success", async () => {
-    const root = await temporary()
-    const name = "concurrent-start"
-    const args = ["start", "--name", name, "--", process.execPath, fixture("fake-opencode.ts")]
-    const children = [spawn(args, root), spawn(args, root)]
-    expect((await Promise.all(children.map((child) => child.exited))).sort()).toEqual([0, 1])
-    const manifest = await Bun.file(join(root, "registry", `${name}.json`)).json()
-    roots.push(manifest.artifacts)
-    instances.push({ root, name })
-  })
+  test("only the owning detached launcher starts an automatic instance", () =>
+    expectSingleConcurrentStart(false))
+
+  test("only the owning detached launcher starts a prepared instance", () =>
+    expectSingleConcurrentStart(true))
 
   test("registers only one concurrent owner for a name", async () => {
     const root = await temporary()
@@ -328,6 +341,83 @@ describe("opencode-drive", () => {
       ])
       expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1)
       expect(results.filter((result) => result.status === "rejected")).toHaveLength(1)
+    })
+  })
+
+  test("transfers temporary initialization only to its declared daemon", async () => {
+    const root = await temporary()
+    const owner = Bun.spawn([
+      process.execPath,
+      "-e",
+      "await Bun.sleep(60_000)",
+    ])
+    try {
+      await withRegistry(root, async () => {
+        const name = "temporary-owner"
+        const artifacts = join(root, "artifacts")
+        await mkdir(join(root, "registry"), { recursive: true })
+        await Bun.write(
+          manifestPath(name),
+          `${JSON.stringify({
+            version: 1,
+            name,
+            createdAt: new Date().toISOString(),
+            cwd: root,
+            artifacts,
+            status: "initialized",
+            temporary: true,
+            pid: owner.pid,
+          })}\n`,
+        )
+        const create = async () => {
+          throw new Error("existing initialization was replaced")
+        }
+
+        await expect(
+          initializeManifest(name, root, create, { temporary: true }),
+        ).rejects.toThrow(`drive instance "${name}" is already starting`)
+        expect(
+          await initializeManifest(name, root, create, {
+            temporary: true,
+            adoptPid: owner.pid,
+          }),
+        ).toMatchObject({ pid: process.pid, artifacts })
+      })
+    } finally {
+      owner.kill()
+      await owner.exited
+    }
+  })
+
+  test("preserves prepared artifacts when reclaiming a dead launcher", async () => {
+    const root = await temporary()
+    await withRegistry(root, async () => {
+      const name = "prepared-owner"
+      const artifacts = join(root, "prepared-artifacts")
+      await mkdir(join(root, "registry"), { recursive: true })
+      await Bun.write(
+        manifestPath(name),
+        `${JSON.stringify({
+          version: 1,
+          name,
+          createdAt: new Date().toISOString(),
+          cwd: root,
+          artifacts,
+          status: "initialized",
+          pid: 2_000_000_000,
+        })}\n`,
+      )
+
+      const reclaimed = await initializeManifest(
+        name,
+        root,
+        async () => {
+          throw new Error("prepared artifacts were replaced")
+        },
+        { temporary: true },
+      )
+      expect(reclaimed).toMatchObject({ pid: process.pid, artifacts })
+      expect("temporary" in reclaimed).toBe(false)
     })
   })
 
@@ -1643,6 +1733,77 @@ async function waitForManifest(root: string, name: string) {
     await Bun.sleep(25)
   }
   throw new Error(`timed out waiting for ${file}`)
+}
+
+async function waitForLauncher(
+  child: ReturnType<typeof spawn>,
+  stderr: Promise<string>,
+) {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<"timeout">((resolve) => {
+    timer = setTimeout(() => resolve("timeout"), 10_000)
+  })
+  try {
+    const status = await Promise.race([child.exited, timeout])
+    if (status !== "timeout") return status
+    if (child.exitCode === null) child.kill()
+    await child.exited
+    throw new Error(
+      `launcher ${child.pid} did not exit after ownership resolved: ${await stderr}`,
+    )
+  } finally {
+    if (timer !== undefined) clearTimeout(timer)
+  }
+}
+
+async function expectSingleConcurrentStart(prepared: boolean) {
+  const root = await temporary()
+  const name = `concurrent-start-${prepared ? "prepared" : "automatic"}`
+  if (prepared) expect(await spawn(["init", "--name", name], root).exited).toBe(0)
+  const args = ["start", "--name", name, "--", process.execPath, fixture("fake-opencode.ts")]
+  const children = [spawn(args, root), spawn(args, root)]
+  const stderr = children.map((child) => new Response(child.stderr).text())
+  let managed = false
+  try {
+    const manifest = await waitForManifest(root, name)
+    instances.push({ root, name })
+    managed = true
+    const statuses = await Promise.all(
+      children.map((child, index) => waitForLauncher(child, stderr[index]!)),
+    )
+    const errors = await Promise.all(stderr)
+    expect(statuses.sort()).toEqual([0, 1])
+    expect(errors.filter((error) => error.includes("is already starting"))).toHaveLength(1)
+    expect(errors.some((error) => error.includes("detached instance exited"))).toBe(false)
+    expect(manifest.pid).toBeGreaterThan(0)
+  } finally {
+    await Promise.all(
+      children.map(async (child) => {
+        if (child.exitCode === null) child.kill()
+        await child.exited
+      }),
+    )
+    await Promise.allSettled(stderr)
+    if (!managed) await terminateUnmanagedInstance(root, name)
+  }
+}
+
+async function terminateUnmanagedInstance(root: string, name: string) {
+  const manifest: unknown = await Bun.file(join(root, "registry", `${name}.json`))
+    .json()
+    .catch(() => undefined)
+  if (
+    typeof manifest !== "object" ||
+    manifest === null ||
+    !("pid" in manifest) ||
+    typeof manifest.pid !== "number" ||
+    !isProcessAlive(manifest.pid)
+  )
+    return
+  process.kill(manifest.pid, "SIGTERM")
+  const deadline = Date.now() + 2_000
+  while (isProcessAlive(manifest.pid) && Date.now() < deadline) await Bun.sleep(25)
+  if (isProcessAlive(manifest.pid)) process.kill(manifest.pid, "SIGKILL")
 }
 
 async function waitForMissing(file: string) {

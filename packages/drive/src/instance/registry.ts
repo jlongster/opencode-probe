@@ -51,7 +51,10 @@ export async function initializeManifest(
   name: string,
   cwd: string,
   create: () => Promise<string>,
-  options: { readonly temporary?: boolean } = {},
+  options: {
+    readonly temporary?: boolean
+    readonly adoptPid?: number
+  } = {},
 ) {
   let initialized: InitializedManifest | undefined
   await withLock(name, false, async () => {
@@ -64,10 +67,24 @@ export async function initializeManifest(
         ])
         existing = undefined
       } else {
-        initialized =
-          options.temporary && existing.temporary
-            ? { ...existing, pid: process.pid }
-            : existing
+        if (
+          !existing.temporary &&
+          existing.pid !== undefined &&
+          !isProcessAlive(existing.pid)
+        ) {
+          const { pid: _, ...released } = existing
+          existing = released
+          await write(existing)
+        }
+        if (existing.pid !== undefined && existing.pid !== process.pid) {
+          if (!options.temporary || options.adoptPid !== existing.pid)
+            throw new Error(`drive instance "${name}" is already starting`)
+          initialized = { ...existing, pid: process.pid }
+        } else if (options.temporary && existing.pid === undefined) {
+          initialized = { ...existing, pid: process.pid }
+        } else {
+          initialized = existing
+        }
         if (initialized !== existing) await write(initialized)
         return
       }
